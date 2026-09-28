@@ -1,0 +1,53 @@
+# Forkday
+
+Forkday is a narrow Electron foundation spike for using a local model CLI from a desktop app. It proves Codex discovery, authentication status, main-process invocation, validated structured responses, and in-memory invocation history.
+
+## Setup
+
+Requirements: Node.js 22+, pnpm, and optionally the Codex CLI.
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Useful checks:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+## Architecture
+
+- `src/main`: owns PATH resolution, CLI discovery, subprocesses, provider health, authentication, history, and IPC handlers.
+- `src/preload`: exposes only the typed `window.forkday` methods through `contextBridge`.
+- `src/renderer`: displays state and calls the preload API; it has no Node or shell access.
+- `src/shared`: contains the small renderer/main contract.
+- `ModelProvider`: the single provider seam. Only `CodexProvider` is implemented.
+
+## Codex behavior
+
+At startup, Forkday asks the user's login shell for its PATH. This handles GUI launches that do not inherit the interactive shell PATH. `FORKDAY_CODEX_PATH` can override the discovered binary later without changing the provider.
+
+Health checks use `codex --version` and the documented `codex login status`. Forkday never reads credential files. If authentication is missing, **Authenticate** starts the normal `codex login --device-auth` flow and opens the URL emitted by Codex in the default browser. The login subprocess is terminated if Forkday exits.
+
+**Test Codex** runs `codex exec` in read-only, ephemeral mode with a 60-second timeout. It ignores user configuration and rules so personal hooks, MCP servers, and project instructions do not affect this fixed health check; Codex authentication remains available. It uses the CLI's documented `--output-schema` and `--output-last-message` options, then validates the JSON again before sending it to the renderer. Temporary schema/output files are removed after each call.
+
+The current CLI does not expose reliable account usage or rate-limit status programmatically. Forkday does not inspect private credential or state files to infer it.
+
+## Limitations
+
+- Invocation history is in memory and resets when the app exits.
+- Authentication uses the device flow; the renderer only receives launch instructions, not credentials.
+- Process-tree cleanup uses POSIX process groups on macOS/Linux and direct child termination on Windows.
+- This is a development shell, not a packaged installer.
+
+## Future scope
+
+- Claude Code provider
+- Chrome extension that sends a job URL to Forkday
+- Playwright Workday runner
+- durable application workflow
