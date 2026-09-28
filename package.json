@@ -1,36 +1,20 @@
 {
   "name": "forkday",
-  "version": "0.1.0",
   "private": true,
-  "description": "A local desktop shell for model-backed automation.",
-  "type": "module",
-  "main": "./out/main/index.js",
+  "description": "Forkday local applications.",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "pnpm typecheck && electron-vite build",
-    "start": "electron-vite preview",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
-  },
-  "dependencies": {
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "dev": "pnpm -C apps/desktop dev",
+    "build": "pnpm -r --if-present run build",
+    "start": "pnpm -C apps/desktop start",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "format": "pnpm -C apps/desktop exec prettier --ignore-path ../../.gitignore --write . ../extension ../../README.md ../../package.json ../../pnpm-workspace.yaml ../../.prettierrc.json",
+    "format:check": "pnpm -C apps/desktop exec prettier --ignore-path ../../.gitignore --check . ../extension ../../README.md ../../package.json ../../pnpm-workspace.yaml ../../.prettierrc.json",
+    "check:extension": "pnpm -C apps/extension lint"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^5.2.0",
-    "electron": "^44.4.5",
-    "electron-vite": "^5.0.0",
-    "eslint": "^10.11.0",
-    "prettier": "^3.9.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.1",
-    "vite": "^7.3.6"
+    "electron": "^44.4.5"
   },
   "packageManager": "pnpm@11.25.0"
 }

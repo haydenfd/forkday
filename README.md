@@ -1,6 +1,6 @@
 # Forkday
 
-Forkday is a narrow Electron foundation spike for using a local model CLI from a desktop app. It proves Codex discovery, authentication status, main-process invocation, validated structured responses, and in-memory invocation history.
+Forkday contains a local Electron shell and a minimal Chrome extension. The desktop app proves local Codex invocation; the extension detects supported Workday job pages without reading or sending page data.
 
 ## Setup
 
@@ -20,12 +20,14 @@ pnpm test
 pnpm build
 ```
 
+To try the extension, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `apps/extension`. Visiting `https://*.myworkdayjobs.com/*` shows a dismissible Forkday prompt.
+
 ## Architecture
 
-- `src/main`: owns PATH resolution, CLI discovery, subprocesses, provider health, authentication, history, and IPC handlers.
-- `src/preload`: exposes only the typed `window.forkday` methods through `contextBridge`.
-- `src/renderer`: displays state and calls the preload API; it has no Node or shell access.
-- `src/shared`: contains the small renderer/main contract.
+- `apps/desktop/src/main`: owns PATH resolution, CLI discovery, subprocesses, provider health, authentication, history, and IPC handlers.
+- `apps/desktop/src/preload`: exposes only the typed `window.forkday` methods through `contextBridge`.
+- `apps/desktop/src/renderer`: displays state and calls the preload API; it has no Node or shell access.
+- `apps/extension`: dependency-free Manifest V3 content script for supported Workday job pages.
 - `ModelProvider`: the single provider seam. Only `CodexProvider` is implemented.
 
 ## Codex behavior
@@ -48,6 +50,6 @@ The current CLI does not expose reliable account usage or rate-limit status prog
 ## Future scope
 
 - Claude Code provider
-- Chrome extension that sends a job URL to Forkday
+- Chrome extension handoff to the desktop app
 - Playwright Workday runner
 - durable application workflow

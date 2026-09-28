@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Forkday",
+  "version": "0.1.0",
+  "description": "Detects supported Workday application pages.",
+  "content_scripts": [
+    {
+      "matches": ["https://*.myworkdayjobs.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
