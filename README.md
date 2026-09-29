@@ -8,6 +8,7 @@ Requirements: Node.js 22+, pnpm, and optionally the Codex CLI.
 
 ```bash
 pnpm install
+pnpm -C apps/desktop exec playwright install chromium
 pnpm dev
 ```
 
@@ -39,6 +40,24 @@ Health checks use `codex --version` and the documented `codex login status`. For
 **Test Codex** runs `codex exec` in read-only, ephemeral mode with a 60-second timeout. It ignores user configuration and rules so personal hooks, MCP servers, and project instructions do not affect this fixed health check; Codex authentication remains available. It uses the CLI's documented `--output-schema` and `--output-last-message` options, then validates the JSON again before sending it to the renderer. Temporary schema/output files are removed after each call.
 
 The current CLI does not expose reliable account usage or rate-limit status programmatically. Forkday does not inspect private credential or state files to infer it.
+
+## Browser proof of concept
+
+Paste a job URL into **Job URL** and click **Open Browser**. The main-process
+`BrowserManager` opens one visible Chromium instance using Playwright's
+`launchPersistentContext`. Its profile lives at
+`app.getPath('userData')/browser-profile`, separate from your normal Chrome
+profile. Subsequent opens reuse that browser. Closing Chromium manually allows
+the next click to launch it again. Closing Forkday's window or quitting the app
+closes its browser, including on macOS.
+
+The preload exposes only `openBrowser(url)`. Main validates HTTP/HTTPS URLs and
+rejects embedded credentials before launching or navigating. The page stays open
+for manual interaction; Forkday does not inspect or automate it.
+
+To verify locally: check Codex is authenticated, click **Test Codex**, paste a
+real `myworkdayjobs.com` job URL, click **Open Browser**, and confirm the separate
+Chromium window displays that URL. Close Forkday and confirm Chromium closes too.
 
 ## Limitations
 
