@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
 
 import type { ModelResponse } from '../shared/contracts';
+import { BrowserManager } from './browserManager';
 import { InvocationHistory } from './history';
 import { resolveLoginShellPath } from './path';
 import { ProcessManager } from './processManager';
@@ -10,6 +11,12 @@ import { CodexProvider, ProviderError } from './providers/codexProvider';
 const processes = new ProcessManager();
 const history = new InvocationHistory();
 let provider: CodexProvider;
+let browser: BrowserManager;
+let quitting = false;
+let browserClosed = false;
+
+const ownsInstance = app.requestSingleInstanceLock();
+if (!ownsInstance) app.quit();
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
@@ -27,6 +34,7 @@ async function createWindow(): Promise<void> {
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', (event) => event.preventDefault());
 
   if (process.env.ELECTRON_RENDERER_URL) {
     await window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -36,6 +44,12 @@ async function createWindow(): Promise<void> {
 }
 
 function registerIpc(): void {
+  ipcMain.handle('browser:open', (event, url: unknown) => {
+    if (event.senderFrame !== event.sender.mainFrame) {
+      throw new Error('Browser requests must come from the Forkday window.');
+    }
+    return browser.open(url);
+  });
   ipcMain.handle('provider:status', () => provider.healthcheck());
   ipcMain.handle('provider:authenticate', () =>
     provider.authenticate((url) => shell.openExternal(url)),
@@ -68,19 +82,36 @@ function registerIpc(): void {
   });
 }
 
-app.whenReady().then(async () => {
-  const loginPath = await resolveLoginShellPath(processes);
-  process.env.PATH = loginPath;
-  provider = new CodexProvider(processes, loginPath);
-  registerIpc();
-  await createWindow();
+if (ownsInstance)
+  app.whenReady().then(async () => {
+    const loginPath = await resolveLoginShellPath(processes);
+    process.env.PATH = loginPath;
+    provider = new CodexProvider(processes, loginPath);
+    browser = new BrowserManager(
+      path.join(app.getPath('userData'), 'browser-profile'),
+    );
+    registerIpc();
+    await createWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+    });
   });
-});
 
-app.on('before-quit', () => processes.killAll());
+app.on('before-quit', (event) => {
+  processes.killAll();
+  if (!browser || browserClosed) return;
+  event.preventDefault();
+  if (quitting) return;
+  quitting = true;
+  void browser
+    .close()
+    .catch(console.error)
+    .finally(() => {
+      browserClosed = true;
+      app.quit();
+    });
+});
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
 });

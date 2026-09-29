@@ -13,6 +13,22 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<InvocationRecord[]>([]);
   const [result, setResult] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [jobUrl, setJobUrl] = useState('');
+  const [browserBusy, setBrowserBusy] = useState(false);
+  const [browserResult, setBrowserResult] = useState<string>();
+
+  const openBrowser = async (): Promise<void> => {
+    setBrowserBusy(true);
+    setBrowserResult(undefined);
+    try {
+      await window.forkday.openBrowser(jobUrl);
+      setBrowserResult('Browser opened. Continue in the Chromium window.');
+    } catch (error) {
+      setBrowserResult(errorMessage(error));
+    } finally {
+      setBrowserBusy(false);
+    }
+  };
 
   const refresh = useCallback(async (): Promise<void> => {
     setBusy(true);
@@ -109,6 +125,35 @@ function App(): React.JSX.Element {
           </button>
         </div>
         {result && <p className="result">{result}</p>}
+      </section>
+
+      <section className="card" aria-busy={browserBusy}>
+        <h2>Job browser</h2>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void openBrowser();
+          }}
+        >
+          <label htmlFor="job-url">Job URL</label>
+          <input
+            id="job-url"
+            type="url"
+            required
+            maxLength={8192}
+            placeholder="https://company.myworkdayjobs.com/…"
+            value={jobUrl}
+            onChange={(event) => setJobUrl(event.target.value)}
+          />
+          <button type="submit" disabled={browserBusy || !jobUrl.trim()}>
+            {browserBusy ? 'Opening…' : 'Open Browser'}
+          </button>
+        </form>
+        {browserResult && (
+          <p className="notice" role="status">
+            {browserResult}
+          </p>
+        )}
       </section>
 
       <section className="card">

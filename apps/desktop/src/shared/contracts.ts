@@ -33,6 +33,7 @@ export interface AuthenticationLaunch {
 }
 
 export interface ForkdayApi {
+  openBrowser(url: string): Promise<void>;
   getProviderStatus(): Promise<ProviderHealth>;
   testProvider(): Promise<ModelResponse>;
   authenticate(): Promise<AuthenticationLaunch>;

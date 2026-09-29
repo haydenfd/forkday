@@ -36,9 +36,20 @@ button:hover:not(:disabled) {
   background: #f5f7fa;
 }
 
-button:focus-visible {
+button:focus-visible,
+input:focus-visible {
   outline: 3px solid #9eb9ff;
   outline-offset: 2px;
+}
+
+input {
+  display: block;
+  width: 100%;
+  margin: 8px 0 12px;
+  border: 1px solid #cbd2dc;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: inherit;
 }
 
 button:disabled {
