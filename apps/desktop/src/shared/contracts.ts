@@ -46,6 +46,7 @@ export type AccountPageKind =
 export interface AccountFormResult {
   page: AccountPageKind;
   filled: string[];
+  submission?: 'submitted' | 'failed';
 }
 
 export interface SavedCredential {

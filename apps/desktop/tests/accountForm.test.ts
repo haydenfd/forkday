@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import {
   detectAccountPage,
   fillAccountForm,
@@ -9,6 +9,26 @@ import {
 
 const fixture = (kind: string): Promise<string> =>
   readFile(new URL(`./fixtures/workday/${kind}.html`, import.meta.url), 'utf8');
+
+async function enableCreateAccount(page: Page): Promise<void> {
+  await page.evaluate(
+    (html) => {
+      document.addEventListener('click', (event) => {
+        if (
+          (event.target as HTMLElement).closest(
+            '[data-automation-id=createAccountLink]',
+          )
+        ) {
+          setTimeout(() => {
+            document.body.innerHTML = html;
+            document.body.dataset.clicked = 'yes';
+          }, 100);
+        }
+      });
+    },
+    await fixture('create_account'),
+  );
+}
 
 test('Workday detection and filling stop before consent and submission', async () => {
   const browser = await chromium.launch();
@@ -26,6 +46,7 @@ test('Workday detection and filling stop before consent and submission', async (
     }
     for (const kind of ['create_account', 'sign_in'] as const) {
       await page.setContent(await fixture(kind), { timeout: 3000 });
+      await enableCreateAccount(page);
       await page.evaluate(() => {
         document.addEventListener('submit', (e) => {
           e.preventDefault();
@@ -37,11 +58,8 @@ test('Workday detection and filling stop before consent and submission', async (
       });
       const result = await fillAccountForm(page, email, password);
       assert.deepEqual(result, {
-        page: kind,
-        filled:
-          kind === 'create_account'
-            ? ['email', 'password', 'verify_password']
-            : ['email', 'password'],
+        page: 'create_account',
+        filled: ['email', 'password', 'verify_password'],
       });
       assert.equal(
         await page
@@ -55,7 +73,7 @@ test('Workday detection and filling stop before consent and submission', async (
           .inputValue({ timeout: 3000 }),
         password,
       );
-      if (kind === 'create_account') {
+      {
         assert.equal(
           await page
             .locator('[data-automation-id=verifyPassword]')
@@ -69,7 +87,7 @@ test('Workday detection and filling stop before consent and submission', async (
       }
       assert.equal(
         await page.locator('body').getAttribute('data-clicked'),
-        null,
+        kind === 'sign_in' ? 'yes' : null,
       );
       assert.equal(
         await page.locator('body').getAttribute('data-submitted'),
@@ -102,6 +120,7 @@ test('Workday detection and filling stop before consent and submission', async (
       await page.setContent(await fixture('sign_in_options'), {
         timeout: 3000,
       });
+      await enableCreateAccount(page);
       await page.evaluate(
         (html) => {
           document
@@ -114,7 +133,10 @@ test('Workday detection and filling stop before consent and submission', async (
         },
         await fixture(kind),
       );
-      assert.equal((await fillAccountForm(page, email, password)).page, kind);
+      assert.equal(
+        (await fillAccountForm(page, email, password)).page,
+        'create_account',
+      );
     }
     await page.setContent(
       '<a data-automation-id="applyManually" href="#">Apply Manually</a>',
@@ -188,3 +210,88 @@ test(
     }
   },
 );
+
+test('stored credentials fill Sign In directly, and submission advances past either account form', async () => {
+  const { submitAccountForm } =
+    await import('../src/main/workday/accountForm.ts');
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    for (const kind of ['sign_in', 'create_account'] as const) {
+      await page.setContent(await fixture(kind), { timeout: 3000 });
+      await page.evaluate(() => {
+        // Workday exposes a visible role=button overlay in front of its hidden submit button.
+        const button = document.querySelector(
+          '[data-automation-id=click_filter]',
+        )!;
+        (button as HTMLElement).style.cssText = 'width:100px;height:40px';
+        button.addEventListener('keydown', (event) => {
+          if ((event as KeyboardEvent).key !== 'Enter') return;
+          const consent =
+            document.querySelector<HTMLInputElement>('[type=checkbox]');
+          if (consent && !consent.checked)
+            throw new Error('Consent was not checked');
+          document.body.innerHTML = '<h1>My Information</h1>';
+        });
+      });
+      const result = await fillAccountForm(
+        page,
+        'candidate@example.com',
+        'Saved-password1!',
+        false,
+      );
+      assert.equal(result.page, kind);
+      assert.deepEqual(await submitAccountForm(page, result), {
+        ...result,
+        submission: 'submitted',
+      });
+      assert.equal(
+        await page.getByRole('heading').innerText(),
+        'My Information',
+      );
+    }
+  } finally {
+    await browser.close();
+  }
+});
+
+test('cross-company redirects never receive saved credentials', async () => {
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    const options = await fixture('sign_in_options');
+    const create = await fixture('create_account');
+    await page.route('https://*.myworkdayjobs.com/**', (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: route.request().url().includes('original.')
+          ? `${options}<script>document.querySelector('[data-automation-id=SignInWithEmailButton]').addEventListener('click', () => {location.href='https://other.myworkdayjobs.com/';});</script>`
+          : create,
+      }),
+    );
+    await page.goto('https://original.myworkdayjobs.com/', { timeout: 3000 });
+    assert.deepEqual(
+      await fillAccountForm(
+        page,
+        'candidate@example.com',
+        'Saved-password1!',
+        false,
+      ),
+      { page: 'unknown', filled: [] },
+    );
+    assert.equal(
+      await page
+        .locator('[data-automation-id=email]')
+        .inputValue({ timeout: 3000 }),
+      '',
+    );
+    assert.equal(
+      await page
+        .locator('[data-automation-id=password]')
+        .inputValue({ timeout: 3000 }),
+      '',
+    );
+  } finally {
+    await browser.close();
+  }
+});
