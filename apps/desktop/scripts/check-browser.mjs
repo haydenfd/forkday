@@ -109,14 +109,16 @@ try {
   await new Promise((r) => setTimeout(r, 200));
   assertRightHalf(await browserView());
 
-  await page.getByRole('link', { name: 'Settings' }).click();
-  await page.getByRole('heading', { name: 'Settings' }).waitFor();
-  await new Promise((r) => setTimeout(r, 200));
-  assert.equal((await browserView()).visible, false);
-  await page.getByRole('link', { name: 'forkday' }).click();
-  await heading.waitFor();
-  await new Promise((r) => setTimeout(r, 200));
-  assert.equal((await browserView()).visible, true);
+  for (const name of ['Settings', 'Profile', 'Saved Credentials']) {
+    await page.getByRole('link', { name, exact: true }).click();
+    await page.getByRole('heading', { name, exact: true }).waitFor();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal((await browserView()).visible, false);
+    await page.getByRole('link', { name: 'forkday' }).click();
+    await heading.waitFor();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal((await browserView()).visible, true);
+  }
 
   const second = url.replace('/job', '/second');
   await page.getByLabel('Job URL').fill(second);
@@ -137,7 +139,7 @@ try {
   assert.equal(page.url().split('#')[0], shellUrl);
 
   console.log(
-    'PASS: app reload, navigation guard, split view, embedded browser, isolation, resize, settings hide/show, URL validation',
+    'PASS: app reload, navigation guard, split view, embedded browser, isolation, resize, Settings/Profile/Saved Credentials hide/show, URL validation',
   );
 } finally {
   await app?.close();
