@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { ForkdayApi } from '../shared/contracts';
 
 const api: ForkdayApi = {
+  fillAccountForm: (email) => ipcRenderer.invoke('browser:fill-account', email),
   openBrowser: (url) => ipcRenderer.invoke('browser:open', url),
   setBrowserVisible: (visible) =>
     ipcRenderer.invoke('browser:visible', visible),

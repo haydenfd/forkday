@@ -67,13 +67,34 @@ validates HTTP/HTTPS URLs, rejects embedded credentials, and blocks unsafe
 navigation. The remote page has no Node access or Forkday preload API. Links
 that request a new window open in the same pane.
 
-Pages currently run manually in the browser; Codex's provider test does not
+Apply starts manually in the browser; Codex's provider test does not
 control the page. Agent browser tools are not connected yet. The application
 queue is in memory and resets when Forkday quits.
 
 Run `pnpm -C apps/desktop test:browser` to verify the split view, embedded
 browser, navigation guards, resize, Settings hide/show, URL validation, and page
 isolation in a real Electron window.
+
+## Fill a Workday account form
+
+1. Open a Workday job URL and click **Apply** in the embedded browser.
+2. Enter your email in Forkday and click **Fill Account Form**.
+3. Review the filled form. Forkday chooses **Apply Manually** and **Sign in with email** when those choices appear, then fills email and a generated password (plus verification on Create Account).
+
+Forkday never checks consent or submits the form. It reports the detected page
+and verified fields; unsupported or incomplete screens return `unknown`.
+The 20-character password stays in main-process memory and the browser fields;
+it is not saved, logged, or returned to the renderer. Each click generates a
+new password. On a Sign In screen this fills a new generated password, not an
+existing account password.
+
+Playwright connects to the embedded browser over Chromium's ephemeral loopback
+DevTools port, enabled at app startup. The remote page still has no Forkday
+preload API. Filling is limited to HTTPS `*.myworkdayjobs.com` pages.
+
+Fixture tests use Chromium: install it with
+`pnpm -C apps/desktop exec playwright install chromium` if needed.
+Run `pnpm -C apps/desktop test:account` for the renderer/IPC/browser integration check.
 
 ## Limitations
 
@@ -86,5 +107,4 @@ isolation in a real Electron window.
 
 - Claude Code provider
 - Chrome extension handoff to the desktop app
-- Playwright Workday runner
 - durable application workflow

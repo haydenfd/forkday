@@ -1,5 +1,11 @@
-import { WebContentsView, type BrowserWindow } from 'electron';
+import { app, WebContentsView, type BrowserWindow } from 'electron';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { chromium, type Browser } from 'playwright';
 
+import type { AccountFormResult } from '../shared/contracts';
+import { fillAccountForm } from './workday/accountForm';
+import { generatePassword } from './workday/generatePassword';
 import { validateBrowserUrl } from './browserUrl';
 
 // Height of the renderer's top bar (`h-14` in App.tsx); the page sits below it.
@@ -8,6 +14,8 @@ const TOP_BAR_HEIGHT = 56;
 export class BrowserManager {
   private view?: WebContentsView;
   private visible = false;
+  private automation?: Browser;
+  private filling = false;
 
   constructor(private readonly window: BrowserWindow) {
     window.on('resize', () => this.resize());
@@ -53,6 +61,78 @@ export class BrowserManager {
     await this.view.webContents.loadURL(url);
   }
 
+  async fillAccountForm(value: unknown): Promise<AccountFormResult> {
+    if (
+      typeof value !== 'string' ||
+      value.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+    )
+      throw new Error('Enter a valid email address.');
+    if (this.filling)
+      throw new Error('Account filling is already in progress.');
+    const contents = this.view?.webContents;
+    if (!contents || contents.isDestroyed())
+      return { page: 'unknown', filled: [] };
+    const url = new URL(contents.getURL());
+    if (
+      url.protocol !== 'https:' ||
+      !url.hostname.endsWith('.myworkdayjobs.com')
+    )
+      return { page: 'unknown', filled: [] };
+    this.filling = true;
+    try {
+      if (!this.automation?.isConnected()) {
+        const [port, endpoint] = (
+          await readFile(
+            path.join(app.getPath('userData'), 'DevToolsActivePort'),
+            'utf8',
+          )
+        )
+          .trim()
+          .split('\n');
+        if (!/^\d+$/.test(port) || !endpoint.startsWith('/devtools/browser/'))
+          throw new Error('Browser connection unavailable.');
+        this.automation = await chromium.connectOverCDP(
+          `ws://127.0.0.1:${port}${endpoint}`,
+          { timeout: 5000 },
+        );
+      }
+      // Match the actual WebContents target, rather than a URL shared by tabs.
+      contents.debugger.attach('1.3');
+      let targetId: string;
+      try {
+        const { targetInfo } = await contents.debugger.sendCommand(
+          'Target.getTargetInfo',
+        );
+        targetId = targetInfo.targetId;
+      } finally {
+        contents.debugger.detach();
+      }
+      for (const page of this.automation
+        .contexts()
+        .flatMap((context) => context.pages())) {
+        const session = await page.context().newCDPSession(page);
+        let matches: boolean;
+        try {
+          const { targetInfo } = await session.send('Target.getTargetInfo');
+          matches = targetInfo.targetId === targetId;
+        } finally {
+          await session.detach();
+        }
+        if (matches)
+          return await fillAccountForm(page, value, generatePassword());
+      }
+      return { page: 'unknown', filled: [] };
+    } catch {
+      // Playwright errors can contain input values; never forward them through IPC.
+      throw new Error(
+        'Could not fill the account form. Check the browser page and retry.',
+      );
+    } finally {
+      this.filling = false;
+    }
+  }
+
   setVisible(visible: boolean): void {
     this.visible = visible;
     this.view?.setVisible(visible);
@@ -61,6 +141,10 @@ export class BrowserManager {
   close(): void {
     const view = this.view;
     this.view = undefined;
+    const automation = this.automation;
+    this.automation = undefined;
+    // Closing a CDP-connected Browser disconnects Playwright, not Electron.
+    void automation?.close().catch(() => {});
     if (!view) return;
     if (!this.window.isDestroyed())
       this.window.contentView.removeChildView(view);

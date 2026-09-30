@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { AccountFormResult } from '../../shared/contracts';
 import { Globe, Settings as SettingsIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,9 @@ export default function App(): React.JSX.Element {
   const [pageUrl, setPageUrl] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [email, setEmail] = useState('');
+  const [filling, setFilling] = useState(false);
+  const [fillResult, setFillResult] = useState<AccountFormResult>();
   const onSettings = route === SETTINGS_ROUTE;
 
   useEffect(() => {
@@ -31,6 +35,7 @@ export default function App(): React.JSX.Element {
 
   const openPage = async (): Promise<void> => {
     setLoading(true);
+    setFillResult(undefined);
     setError(undefined);
     try {
       await window.forkday.openBrowser(draft);
@@ -39,6 +44,19 @@ export default function App(): React.JSX.Element {
       setError(errorMessage(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fillAccount = async (): Promise<void> => {
+    setFilling(true);
+    setError(undefined);
+    setFillResult(undefined);
+    try {
+      setFillResult(await window.forkday.fillAccountForm(email));
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setFilling(false);
     }
   };
 
@@ -100,10 +118,50 @@ export default function App(): React.JSX.Element {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
               />
-              <Button type="submit" disabled={loading || !draft.trim()}>
+              <Button
+                type="submit"
+                disabled={loading || filling || !draft.trim()}
+              >
                 {loading ? 'Opening…' : 'Open'}
               </Button>
             </form>
+
+            <form
+              className="mt-8 space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void fillAccount();
+              }}
+            >
+              <label htmlFor="account-email" className="text-sm font-medium">
+                Email
+              </label>
+              <Input
+                id="account-email"
+                type="email"
+                required
+                maxLength={254}
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <p className="text-sm text-muted-foreground">
+                Click Apply in the browser first. Filling leaves consent and
+                submission to you.
+              </p>
+              <Button
+                type="submit"
+                disabled={!pageUrl || loading || filling || !email.trim()}
+              >
+                {filling ? 'Filling…' : 'Fill Account Form'}
+              </Button>
+            </form>
+            {fillResult && (
+              <p role="status" className="mt-4 text-sm">
+                Page: {fillResult.page}. Filled:{' '}
+                {fillResult.filled.join(', ') || 'none'}.
+              </p>
+            )}
 
             {error && (
               <p

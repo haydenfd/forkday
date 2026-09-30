@@ -9,6 +9,10 @@ import { resolveLoginShellPath } from './path';
 import { ProcessManager } from './processManager';
 import { CodexProvider, ProviderError } from './providers/codexProvider';
 
+// Playwright connects only over loopback, using Chromium's ephemeral port.
+app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+app.commandLine.appendSwitch('remote-debugging-port', '0');
+
 const processes = new ProcessManager();
 const history = new InvocationHistory();
 let provider: CodexProvider;
@@ -50,6 +54,7 @@ async function createWindow(): Promise<void> {
 
 function registerIpc(): void {
   const jobHandlers = {
+    'browser:fill-account': (email: unknown) => browser.fillAccountForm(email),
     'browser:open': async (url: unknown) => {
       browser.setVisible(true);
       await browser.open(url);
