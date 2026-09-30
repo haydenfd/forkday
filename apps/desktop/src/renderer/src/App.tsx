@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
 import type { AccountFormResult } from '../../shared/contracts';
-import { Globe, Settings as SettingsIcon } from 'lucide-react';
+import {
+  Globe,
+  Settings as SettingsIcon,
+  UserRound,
+  FileText,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import Settings from './Settings';
+import Profile from './Profile';
+import SavedCredentials from './SavedCredentials';
 
 // ponytail: hash routes, swap for TanStack Router once there are more pages
 const SETTINGS_ROUTE = '#/settings';
+const PROFILE_ROUTE = '#/profile';
+const CREDENTIALS_ROUTE = '#/credentials';
 
 export default function App(): React.JSX.Element {
   const [route, setRoute] = useState(location.hash);
@@ -16,10 +25,12 @@ export default function App(): React.JSX.Element {
   const [pageUrl, setPageUrl] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const [email, setEmail] = useState('');
   const [filling, setFilling] = useState(false);
   const [fillResult, setFillResult] = useState<AccountFormResult>();
   const onSettings = route === SETTINGS_ROUTE;
+  const onProfile = route === PROFILE_ROUTE;
+  const onCredentials = route === CREDENTIALS_ROUTE;
+  const fullWidth = onSettings || onProfile || onCredentials;
 
   useEffect(() => {
     const onHashChange = (): void => setRoute(location.hash);
@@ -30,8 +41,8 @@ export default function App(): React.JSX.Element {
   // The browser is a native view layered over the right half; hide it on
   // pages that use the full width.
   useEffect(() => {
-    if (pageUrl) void window.forkday.setBrowserVisible(!onSettings);
-  }, [onSettings, pageUrl]);
+    if (pageUrl) void window.forkday.setBrowserVisible(!fullWidth);
+  }, [fullWidth, pageUrl]);
 
   const openPage = async (): Promise<void> => {
     setLoading(true);
@@ -52,7 +63,7 @@ export default function App(): React.JSX.Element {
     setError(undefined);
     setFillResult(undefined);
     try {
-      setFillResult(await window.forkday.fillAccountForm(email));
+      setFillResult(await window.forkday.fillAccountForm());
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -66,28 +77,71 @@ export default function App(): React.JSX.Element {
         <a href="#/" className="text-lg font-semibold tracking-tight">
           forkday
         </a>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'text-muted-foreground',
-            onSettings && 'bg-secondary text-foreground',
-          )}
-        >
-          <a
-            href={SETTINGS_ROUTE}
-            aria-label="Settings"
-            aria-current={onSettings ? 'page' : undefined}
+        <div className="flex gap-2">
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'text-muted-foreground',
+              onCredentials && 'bg-brand-soft text-brand-strong',
+            )}
           >
-            <SettingsIcon />
-          </a>
-        </Button>
+            <a
+              href={CREDENTIALS_ROUTE}
+              aria-label="Saved Credentials"
+              title="Saved Credentials"
+              aria-current={onCredentials ? 'page' : undefined}
+            >
+              <FileText />
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'text-muted-foreground',
+              onProfile && 'bg-brand-soft text-brand-strong',
+            )}
+          >
+            <a
+              href={PROFILE_ROUTE}
+              aria-label="Profile"
+              aria-current={onProfile ? 'page' : undefined}
+            >
+              <UserRound />
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'text-muted-foreground',
+              onSettings && 'bg-brand-soft text-brand-strong',
+            )}
+          >
+            <a
+              href={SETTINGS_ROUTE}
+              aria-label="Settings"
+              aria-current={onSettings ? 'page' : undefined}
+            >
+              <SettingsIcon />
+            </a>
+          </Button>
+        </div>
       </nav>
 
-      {onSettings ? (
+      {fullWidth ? (
         <main className="@container overflow-y-auto px-8 py-8">
-          <Settings />
+          {onCredentials ? (
+            <SavedCredentials />
+          ) : onProfile ? (
+            <Profile />
+          ) : (
+            <Settings />
+          )}
         </main>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-2">
@@ -133,33 +187,22 @@ export default function App(): React.JSX.Element {
                 void fillAccount();
               }}
             >
-              <label htmlFor="account-email" className="text-sm font-medium">
-                Email
-              </label>
-              <Input
-                id="account-email"
-                type="email"
-                required
-                maxLength={254}
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
               <p className="text-sm text-muted-foreground">
-                Click Apply in the browser first. Filling leaves consent and
-                submission to you.
+                Click Apply in the browser first. Saved credentials sign you in;
+                otherwise Forkday creates an account using your Profile email.
               </p>
-              <Button
-                type="submit"
-                disabled={!pageUrl || loading || filling || !email.trim()}
-              >
-                {filling ? 'Filling…' : 'Fill Account Form'}
+              <Button type="submit" disabled={!pageUrl || loading || filling}>
+                {filling ? 'Signing in…' : 'Create Account / Sign In'}
               </Button>
             </form>
             {fillResult && (
               <p role="status" className="mt-4 text-sm">
                 Page: {fillResult.page}. Filled:{' '}
                 {fillResult.filled.join(', ') || 'none'}.
+                {fillResult.submission === 'submitted' &&
+                  ' Account form submitted. Continue in the browser.'}
+                {fillResult.submission === 'failed' &&
+                  ' Sign-in was not completed. Review the browser for errors or verification.'}
               </p>
             )}
 
@@ -189,5 +232,8 @@ export default function App(): React.JSX.Element {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('Add your email in Profile.')
+    ? 'Add your email in Profile.'
+    : message;
 }
