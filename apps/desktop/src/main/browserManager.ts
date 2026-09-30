@@ -4,7 +4,15 @@ import path from 'node:path';
 import { chromium, type Browser } from 'playwright';
 
 import type { AccountFormResult } from '../shared/contracts';
-import { fillAccountForm } from './workday/accountForm';
+import {
+  CredentialStorageError,
+  type CredentialStore,
+} from './credentialStore';
+import {
+  detectAccountPage,
+  fillAccountForm,
+  submitAccountForm,
+} from './workday/accountForm';
 import { generatePassword } from './workday/generatePassword';
 import { validateBrowserUrl } from './browserUrl';
 
@@ -17,7 +25,10 @@ export class BrowserManager {
   private automation?: Browser;
   private filling = false;
 
-  constructor(private readonly window: BrowserWindow) {
+  constructor(
+    private readonly window: BrowserWindow,
+    private readonly credentials: CredentialStore,
+  ) {
     window.on('resize', () => this.resize());
     window.on('closed', () => this.close());
   }
@@ -119,11 +130,57 @@ export class BrowserManager {
         } finally {
           await session.detach();
         }
-        if (matches)
-          return await fillAccountForm(page, value, generatePassword());
+        if (matches) {
+          const origin = new URL(page.url()).origin;
+          if (origin !== url.origin) return { page: 'unknown', filled: [] };
+          const kind = await detectAccountPage(page);
+          if (
+            kind === 'unknown' &&
+            !(await page
+              .locator('[data-automation-id="applyManually"]')
+              .isVisible())
+          )
+            return { page: 'unknown', filled: [] };
+          const existing = await this.credentials.find(origin, value);
+          const password = existing?.password ?? generatePassword();
+          if (!existing) {
+            const heading = page.getByRole('heading', { level: 1 });
+            const title =
+              (await heading.count()) === 1
+                ? await heading.textContent({ timeout: 3000 })
+                : '';
+            const company =
+              title
+                ?.trim()
+                .match(/^Careers at (.+)$/i)?.[1]
+                ?.slice(0, 200) || url.hostname.split('.')[0];
+            // Persist before filling or submission so account creation cannot lose the password.
+            await this.credentials.save({
+              company,
+              origin,
+              email: value,
+              password,
+            });
+          }
+          if (new URL(page.url()).origin !== origin)
+            return { page: 'unknown', filled: [] };
+          const result = await fillAccountForm(
+            page,
+            existing?.email ?? value,
+            password,
+            !existing,
+            Boolean(existing),
+          );
+          if (new URL(page.url()).origin !== origin)
+            return { page: 'unknown', filled: result.filled };
+          if (result.page === 'create_account' || result.page === 'sign_in')
+            return await submitAccountForm(page, result);
+          return result;
+        }
       }
       return { page: 'unknown', filled: [] };
-    } catch {
+    } catch (error) {
+      if (error instanceof CredentialStorageError) throw error;
       // Playwright errors can contain input values; never forward them through IPC.
       throw new Error(
         'Could not fill the account form. Check the browser page and retry.',
