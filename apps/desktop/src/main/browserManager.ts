@@ -1,66 +1,81 @@
-import { chromium, type BrowserContext } from 'playwright';
+import { WebContentsView, type BrowserWindow } from 'electron';
 
-export function validateBrowserUrl(value: unknown): string {
-  if (typeof value !== 'string' || value.length > 8_192) {
-    throw new Error('Enter a valid HTTP or HTTPS job URL.');
-  }
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('Enter a valid HTTP or HTTPS job URL.');
-  }
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username ||
-    url.password
-  ) {
-    throw new Error('Use an HTTP or HTTPS URL without embedded credentials.');
-  }
-  return url.href;
-}
+import { validateBrowserUrl } from './browserUrl';
+
+// Height of the renderer's top bar (`h-14` in App.tsx); the page sits below it.
+const TOP_BAR_HEIGHT = 56;
 
 export class BrowserManager {
-  private context?: BrowserContext;
-  private pending: Promise<void> = Promise.resolve();
-  private closing = false;
-  private readonly profilePath: string;
+  private view?: WebContentsView;
+  private visible = false;
 
-  constructor(profilePath: string) {
-    this.profilePath = profilePath;
+  constructor(private readonly window: BrowserWindow) {
+    window.on('resize', () => this.resize());
+    window.on('closed', () => this.close());
   }
 
-  open(value: unknown): Promise<void> {
+  async open(value: unknown): Promise<void> {
     const url = validateBrowserUrl(value);
-    if (this.closing) throw new Error('Forkday is closing.');
-
-    const operation = this.pending.then(async () => {
-      if (!this.context) {
-        const context = await chromium.launchPersistentContext(
-          this.profilePath,
-          {
-            headless: false,
-            chromiumSandbox: true,
-            viewport: null,
-          },
-        );
-        this.context = context;
-        context.on('close', () => {
-          if (this.context === context) this.context = undefined;
-        });
-      }
-      const page = this.context.pages()[0] ?? (await this.context.newPage());
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-      await page.bringToFront();
-    });
-    this.pending = operation.catch(() => {});
-    return operation;
+    if (!this.view) {
+      this.view = new WebContentsView({
+        webPreferences: {
+          partition: 'persist:forkday-jobs',
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+        },
+      });
+      const contents = this.view.webContents;
+      contents.session.setPermissionRequestHandler(
+        (_contents, _permission, callback) => callback(false),
+      );
+      contents.session.setPermissionCheckHandler(() => false);
+      const guardNavigation = (
+        event: Electron.Event,
+        destination: string,
+      ): void => {
+        try {
+          validateBrowserUrl(destination);
+        } catch {
+          event.preventDefault();
+        }
+      };
+      contents.on('will-navigate', guardNavigation);
+      contents.on('will-redirect', guardNavigation);
+      contents.setWindowOpenHandler(({ url }) => {
+        void this.open(url).catch(console.error);
+        return { action: 'deny' };
+      });
+      this.window.contentView.addChildView(this.view);
+    }
+    this.view.setVisible(this.visible);
+    this.resize();
+    await this.view.webContents.loadURL(url);
   }
 
-  async close(): Promise<void> {
-    this.closing = true;
-    await this.pending;
-    await this.context?.close();
-    this.context = undefined;
+  setVisible(visible: boolean): void {
+    this.visible = visible;
+    this.view?.setVisible(visible);
+  }
+
+  close(): void {
+    const view = this.view;
+    this.view = undefined;
+    if (!view) return;
+    if (!this.window.isDestroyed())
+      this.window.contentView.removeChildView(view);
+    if (!view.webContents.isDestroyed()) view.webContents.close();
+  }
+
+  private resize(): void {
+    if (!this.view || this.window.isDestroyed()) return;
+    const [width, height] = this.window.getContentSize();
+    const sidebar = Math.floor(width / 2);
+    this.view.setBounds({
+      x: sidebar,
+      y: TOP_BAR_HEIGHT,
+      width: width - sidebar,
+      height: height - TOP_BAR_HEIGHT,
+    });
   }
 }

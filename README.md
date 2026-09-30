@@ -8,7 +8,7 @@ Requirements: Node.js 22+, pnpm, and optionally the Codex CLI.
 
 ```bash
 pnpm install
-pnpm -C apps/desktop exec playwright install chromium
+pnpm exec install-electron
 pnpm dev
 ```
 
@@ -27,9 +27,17 @@ To try the extension, open `chrome://extensions`, enable **Developer mode**, cho
 
 - `apps/desktop/src/main`: owns PATH resolution, CLI discovery, subprocesses, provider health, authentication, history, and IPC handlers.
 - `apps/desktop/src/preload`: exposes only the typed `window.forkday` methods through `contextBridge`.
-- `apps/desktop/src/renderer`: displays state and calls the preload API; it has no Node or shell access.
+- `apps/desktop/src/renderer`: Vite/React UI styled with Tailwind CSS and local shadcn/ui components. It calls the preload API and has no Node or shell access.
 - `apps/extension`: dependency-free Manifest V3 content script for supported Workday job pages.
 - `ModelProvider`: the single provider seam. Only `CodexProvider` is implemented.
+
+UI components live in `apps/desktop/src/renderer/src/components/ui`. The shadcn
+configuration is `apps/desktop/components.json`; Tailwind runs through the Vite
+plugin in `electron.vite.config.ts`.
+
+`pnpm dev` watches all three Electron layers: renderer changes update through
+Vite HMR, preload changes reload the renderer, and main-process changes restart
+Electron automatically. Main-process restarts reset the in-memory job queue.
 
 ## Codex behavior
 
@@ -43,21 +51,29 @@ The current CLI does not expose reliable account usage or rate-limit status prog
 
 ## Browser proof of concept
 
-Paste a job URL into **Job URL** and click **Open Browser**. The main-process
-`BrowserManager` opens one visible Chromium instance using Playwright's
-`launchPersistentContext`. Its profile lives at
-`app.getPath('userData')/browser-profile`, separate from your normal Chrome
-profile. Subsequent opens reuse that browser. Closing Chromium manually allows
-the next click to launch it again. Closing Forkday's window or quitting the app
-closes its browser, including on macOS.
+The home screen is split in two: paste a job URL on the left and it loads in
+the embedded browser on the right, below the top bar. Until a page loads, the
+right half shows a blank placeholder. The browser hides on **Settings** and
+returns when you go back.
 
-The preload exposes only `openBrowser(url)`. Main validates HTTP/HTTPS URLs and
-rejects embedded credentials before launching or navigating. The page stays open
-for manual interaction; Forkday does not inspect or automate it.
+The job queue dashboard (active, queued, completed, and failed applications) is
+parked in `apps/desktop/src/renderer/src/JobsDashboard.tsx`. It still compiles
+but is not rendered; render it from `main.tsx` to bring it back. The main-process
+`JobQueue` and its IPC are unchanged.
 
-To verify locally: check Codex is authenticated, click **Test Codex**, paste a
-real `myworkdayjobs.com` job URL, click **Open Browser**, and confirm the separate
-Chromium window displays that URL. Close Forkday and confirm Chromium closes too.
+The browser uses Electron's `WebContentsView` and a separate persistent session
+(`persist:forkday-jobs`) so logins survive closing and reopening the app. Main
+validates HTTP/HTTPS URLs, rejects embedded credentials, and blocks unsafe
+navigation. The remote page has no Node access or Forkday preload API. Links
+that request a new window open in the same pane.
+
+Pages currently run manually in the browser; Codex's provider test does not
+control the page. Agent browser tools are not connected yet. The application
+queue is in memory and resets when Forkday quits.
+
+Run `pnpm -C apps/desktop test:browser` to verify the split view, embedded
+browser, navigation guards, resize, Settings hide/show, URL validation, and page
+isolation in a real Electron window.
 
 ## Limitations
 

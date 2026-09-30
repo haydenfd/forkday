@@ -32,8 +32,22 @@ export interface AuthenticationLaunch {
   message: string;
 }
 
+export interface Job {
+  id: string;
+  title: string;
+  url: string;
+  status: 'queued' | 'opening' | 'running' | 'completed' | 'failed';
+  error?: string;
+}
+
 export interface ForkdayApi {
   openBrowser(url: string): Promise<void>;
+  setBrowserVisible(visible: boolean): Promise<void>;
+  listJobs(): Promise<Job[]>;
+  addJob(url: string): Promise<Job[]>;
+  showJob(id: string): Promise<void>;
+  showDashboard(): Promise<void>;
+  completeJob(id: string): Promise<Job[]>;
   getProviderStatus(): Promise<ProviderHealth>;
   testProvider(): Promise<ModelResponse>;
   authenticate(): Promise<AuthenticationLaunch>;
