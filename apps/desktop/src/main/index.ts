@@ -1,19 +1,26 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, safeStorage } from 'electron';
 import path from 'node:path';
 
 import type { ModelResponse } from '../shared/contracts';
+import { CredentialStore } from './credentialStore';
 import { BrowserManager } from './browserManager';
 import { JobQueue } from './jobQueue';
 import { InvocationHistory } from './history';
 import { resolveLoginShellPath } from './path';
 import { ProcessManager } from './processManager';
+import { ProfileStore } from './profileStore';
 import { CodexProvider, ProviderError } from './providers/codexProvider';
+
+// Playwright connects only over loopback, using Chromium's ephemeral port.
+app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+app.commandLine.appendSwitch('remote-debugging-port', '0');
 
 const processes = new ProcessManager();
 const history = new InvocationHistory();
 let provider: CodexProvider;
 let browser: BrowserManager;
 let jobs: JobQueue;
+let credentials: CredentialStore;
 
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
@@ -33,7 +40,7 @@ async function createWindow(): Promise<void> {
     },
   });
 
-  browser = new BrowserManager(window);
+  browser = new BrowserManager(window, credentials);
   jobs = new JobQueue(browser);
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -49,7 +56,17 @@ async function createWindow(): Promise<void> {
 }
 
 function registerIpc(): void {
+  const profiles = new ProfileStore(app.getPath('userData'));
   const jobHandlers = {
+    'credentials:list': () => credentials.list(),
+    'credentials:reveal': (value: unknown) => credentials.revealPassword(value),
+    'profile:get': () => profiles.load(),
+    'profile:save': (profile: unknown) => profiles.save(profile),
+    'browser:fill-account': async () => {
+      const { email } = await profiles.load();
+      if (!email) throw new Error('Add your email in Profile.');
+      return browser.fillAccountForm(email);
+    },
     'browser:open': async (url: unknown) => {
       browser.setVisible(true);
       await browser.open(url);
@@ -68,7 +85,7 @@ function registerIpc(): void {
         event.senderFrame !== event.sender.mainFrame ||
         !BrowserWindow.fromWebContents(event.sender)
       ) {
-        throw new Error('Job requests must come from the Forkday window.');
+        throw new Error('Requests must come from the Forkday window.');
       }
       return handler(value);
     });
@@ -110,6 +127,7 @@ if (ownsInstance)
     const loginPath = await resolveLoginShellPath(processes);
     process.env.PATH = loginPath;
     provider = new CodexProvider(processes, loginPath);
+    credentials = new CredentialStore(app.getPath('userData'), safeStorage);
     registerIpc();
     await createWindow();
 

@@ -71,6 +71,10 @@ export default function Settings(): React.JSX.Element {
         </p>
       </header>
 
+      <Button asChild variant="outline" className="mt-6">
+        <a href="#/profile">Profile</a>
+      </Button>
+
       <div className="mt-8 grid gap-6 @5xl:grid-cols-2">
         <section>
           <h2 className="eyebrow mb-3">Codex connection</h2>

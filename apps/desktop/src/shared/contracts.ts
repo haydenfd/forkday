@@ -1,3 +1,5 @@
+import type { Profile } from './profile';
+
 export type ProviderId = 'codex';
 
 export interface ProviderHealth {
@@ -40,7 +42,27 @@ export interface Job {
   error?: string;
 }
 
+export type AccountPageKind =
+  'sign_in_options' | 'create_account' | 'sign_in' | 'unknown';
+
+export interface AccountFormResult {
+  page: AccountPageKind;
+  filled: string[];
+  submission?: 'submitted' | 'failed';
+}
+
+export interface SavedCredential {
+  company: string;
+  origin: string;
+  email: string;
+}
+
 export interface ForkdayApi {
+  listCredentials(): Promise<SavedCredential[]>;
+  revealCredentialPassword(origin: string, email: string): Promise<string>;
+  getProfile(): Promise<Profile>;
+  saveProfile(profile: Profile): Promise<void>;
+  fillAccountForm(): Promise<AccountFormResult>;
   openBrowser(url: string): Promise<void>;
   setBrowserVisible(visible: boolean): Promise<void>;
   listJobs(): Promise<Job[]>;
