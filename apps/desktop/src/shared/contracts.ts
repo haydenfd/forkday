@@ -48,6 +48,12 @@ export interface AccountFormResult {
   filled: string[];
 }
 
+export interface SavedCredential {
+  company: string;
+  origin: string;
+  email: string;
+}
+
 export interface ForkdayApi {
   fillAccountForm(email: string): Promise<AccountFormResult>;
   openBrowser(url: string): Promise<void>;
