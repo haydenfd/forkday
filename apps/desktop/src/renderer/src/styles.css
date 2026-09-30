@@ -3,7 +3,7 @@
 
 /*
  * Forkday design system.
- * Geometric type, cool ink neutrals, one dodger-blue brand accent (the fork).
+ * Geometric type, charcoal surfaces, one green brand accent (the fork).
  * Components read only these tokens; change a value here, not in a component.
  */
 
@@ -26,7 +26,7 @@
   --color-accent: var(--secondary);
   --color-accent-foreground: var(--foreground);
   --color-destructive: var(--destructive);
-  --color-destructive-foreground: white;
+  --color-destructive-foreground: #271015;
   --color-destructive-soft: var(--destructive-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -41,35 +41,36 @@
   --radius-lg: 0.625rem;
   --radius-xl: 0.875rem;
 
-  --shadow-card: 0 1px 2px rgb(23 20 43 / 0.04);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.18);
 }
 
 :root {
+  color-scheme: dark;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
 
-  /* Neutrals: cool ink on near-white */
-  --background: #f7f8fa;
-  --foreground: #15171c;
-  --card: #ffffff;
-  --secondary: #f0f2f5;
-  --muted-foreground: #626a77;
-  --border: #e4e7ec;
+  /* Neutrals: soft white on charcoal */
+  --background: #151719;
+  --foreground: #e8eaed;
+  --card: #202326;
+  --secondary: #2a2e32;
+  --muted-foreground: #a5abb3;
+  --border: #656d75;
 
-  /* Actions are ink; blue is reserved for brand, focus, and live state */
-  --primary: #15171c;
-  --primary-foreground: #ffffff;
-  --brand: #1e90ff; /* dodger blue: logo, focus ring, dots. Too light for text */
-  --brand-soft: #e8f3ff;
-  --brand-strong: #0a6ed1; /* blue text on light surfaces (AA) */
+  /* Green marks actions, focus, and selected states */
+  --primary: #4ade80;
+  --primary-foreground: #102218;
+  --brand: #4ade80;
+  --brand-soft: #193c2a;
+  --brand-strong: #86efac;
 
   /* Status: text color on its -soft background */
-  --success: #0f7a4f;
-  --success-soft: #e6f6ee;
-  --warning: #9a5b00;
-  --warning-soft: #fdf1dc;
-  --destructive: #c62f40;
-  --destructive-soft: #fdecee;
+  --success: #6ee7b7;
+  --success-soft: #16382e;
+  --warning: #fbbf24;
+  --warning-soft: #3a2d15;
+  --destructive: #fb7185;
+  --destructive-soft: #421f29;
 }
 
 /* Small uppercase section label ("ACTIVE APPLICATION", "UP NEXT") */
