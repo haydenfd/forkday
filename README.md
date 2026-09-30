@@ -53,7 +53,7 @@ The current CLI does not expose reliable account usage or rate-limit status prog
 
 The home screen is split in two: paste a job URL on the left and it loads in
 the embedded browser on the right, below the top bar. Until a page loads, the
-right half shows a blank placeholder. The browser hides on **Settings** and
+right half shows a blank placeholder. The browser hides on **Settings**, **Profile**, and **Saved Credentials** and
 returns when you go back.
 
 The job queue dashboard (active, queued, completed, and failed applications) is
@@ -75,26 +75,64 @@ Run `pnpm -C apps/desktop test:browser` to verify the split view, embedded
 browser, navigation guards, resize, Settings hide/show, URL validation, and page
 isolation in a real Electron window.
 
-## Fill a Workday account form
+## Workday accounts
 
-1. Open a Workday job URL and click **Apply** in the embedded browser.
-2. Enter your email in Forkday and click **Fill Account Form**.
-3. Review the filled form. Forkday chooses **Apply Manually** and **Sign in with email** when those choices appear, then fills email and a generated password (plus verification on Create Account).
+1. Save your email in **Profile**.
+2. Open a Workday job URL and click **Apply** in the embedded browser.
+3. Click **Create Account / Sign In**. Forkday chooses Apply Manually and email sign-in when needed, then creates an account on first use or signs in using previously saved credentials.
 
-Forkday never checks consent or submits the form. It reports the detected page
-and verified fields; unsupported or incomplete screens return `unknown`.
-The 20-character password stays in main-process memory and the browser fields;
-it is not saved, logged, or returned to the renderer. Each click generates a
-new password. On a Sign In screen this fills a new generated password, not an
-existing account password.
+Creating an account fills both password fields, checks the account consent box,
+and submits the account form. Sign In reuses the saved password. Forkday stops
+at the next screen; review any validation errors or verification requests in
+the browser.
+
+The document icon at the top right opens **Saved Credentials**, showing company
+and email in a searchable table with passwords hidden by default. Company names come from the careers heading
+when available, with the Workday tenant name as a fallback. Click the eye icon on a row to reveal its password; click again to hide it.
+Only an explicit reveal request returns that password to the renderer;
+passwords are not logged or copied to the clipboard.
+
+Credentials are saved before filling/submission in an encrypted `credentials.enc`
+file under Electron's user-data directory. Electron `safeStorage` protects the
+encryption key with macOS Keychain; credentials are matched by Workday host and
+email and survive app restarts. If secure storage is unavailable or the file
+cannot be decrypted, Forkday stops rather than saving plaintext or overwriting
+it. The Profile file remains separate from encrypted account credentials.
 
 Playwright connects to the embedded browser over Chromium's ephemeral loopback
-DevTools port, enabled at app startup. The remote page still has no Forkday
-preload API. Filling is limited to HTTPS `*.myworkdayjobs.com` pages.
+DevTools port, enabled at app startup. The remote page has no Forkday preload
+API. Filling is limited to HTTPS `*.myworkdayjobs.com` pages.
 
 Fixture tests use Chromium: install it with
 `pnpm -C apps/desktop exec playwright install chromium` if needed.
-Run `pnpm -C apps/desktop test:account` for the renderer/IPC/browser integration check.
+Run `pnpm -C apps/desktop test:account` to check encrypted persistence and account
+creation/sign-in across an app restart using local Workday fixtures. This check
+never submits to a live Workday site.
+
+## Local profile
+
+The Profile icon at the top right opens a full-width form with Personal details,
+Address, Phone, and Links sections. Settings also links to Profile. All fields
+are optional; email and URLs are validated when provided. Save reports validation
+errors or **Saved** and writes `profile.json` atomically in Electron's user-data
+directory. Missing files load as an empty profile; invalid existing files are
+reported and preserved rather than overwritten.
+
+The Phone section matches the inspected Workday fields: Home/Mobile device type,
+country calling-code label, national number, and optional extension. Ten-digit
+numbers format automatically as `(202) 555-0123`; Profile saves the digits
+separately from the calling code. Phone data survives restarting the app.
+The country-code field stores a Workday label such as
+`United States of America (+1)` rather than a copied country directory.
+
+Profile data is local plaintext, separate from encrypted account passwords.
+New profile and credential files are created with owner-only permissions on
+POSIX systems, and their names are ignored by Git. Source examples and tests
+use fictional data. Keep real user-data files and browser captures outside
+the repository.
+
+Phone setup and documented My Information selectors prepare the next application
+step; My Information autofill and later application steps are not implemented.
 
 ## Limitations
 

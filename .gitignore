@@ -15,3 +15,7 @@ Thumbs.db
 *.pem
 *.key
 coverage/
+profile.json
+profile.json.*.tmp
+credentials.enc
+credentials.enc.*.tmp
