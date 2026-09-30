@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { ModelResponse } from '../shared/contracts';
 import { BrowserManager } from './browserManager';
+import { JobQueue } from './jobQueue';
 import { InvocationHistory } from './history';
 import { resolveLoginShellPath } from './path';
 import { ProcessManager } from './processManager';
@@ -12,17 +13,16 @@ const processes = new ProcessManager();
 const history = new InvocationHistory();
 let provider: CodexProvider;
 let browser: BrowserManager;
-let quitting = false;
-let browserClosed = false;
+let jobs: JobQueue;
 
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
 
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
-    width: 820,
+    width: 1280,
     height: 680,
-    minWidth: 680,
+    minWidth: 900,
     minHeight: 560,
     title: 'Forkday',
     webPreferences: {
@@ -33,8 +33,13 @@ async function createWindow(): Promise<void> {
     },
   });
 
+  browser = new BrowserManager(window);
+  jobs = new JobQueue(browser);
+
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event) => event.preventDefault());
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url !== window.webContents.getURL()) event.preventDefault();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     await window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -44,12 +49,28 @@ async function createWindow(): Promise<void> {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('browser:open', (event, url: unknown) => {
-    if (event.senderFrame !== event.sender.mainFrame) {
-      throw new Error('Browser requests must come from the Forkday window.');
-    }
-    return browser.open(url);
-  });
+  const jobHandlers = {
+    'browser:open': async (url: unknown) => {
+      browser.setVisible(true);
+      await browser.open(url);
+    },
+    'jobs:list': () => jobs.list(),
+    'jobs:add': (url: unknown) => jobs.add(url),
+    'jobs:show': (id: unknown) => jobs.show(id),
+    'jobs:home': () => jobs.home(),
+    'jobs:complete': (id: unknown) => jobs.complete(id),
+  };
+  for (const [channel, handler] of Object.entries(jobHandlers)) {
+    ipcMain.handle(channel, (event, value: unknown) => {
+      if (
+        event.senderFrame !== event.sender.mainFrame ||
+        !BrowserWindow.fromWebContents(event.sender)
+      ) {
+        throw new Error('Job requests must come from the Forkday window.');
+      }
+      return handler(value);
+    });
+  }
   ipcMain.handle('provider:status', () => provider.healthcheck());
   ipcMain.handle('provider:authenticate', () =>
     provider.authenticate((url) => shell.openExternal(url)),
@@ -87,9 +108,6 @@ if (ownsInstance)
     const loginPath = await resolveLoginShellPath(processes);
     process.env.PATH = loginPath;
     provider = new CodexProvider(processes, loginPath);
-    browser = new BrowserManager(
-      path.join(app.getPath('userData'), 'browser-profile'),
-    );
     registerIpc();
     await createWindow();
 
@@ -98,19 +116,9 @@ if (ownsInstance)
     });
   });
 
-app.on('before-quit', (event) => {
+app.on('before-quit', () => {
   processes.killAll();
-  if (!browser || browserClosed) return;
-  event.preventDefault();
-  if (quitting) return;
-  quitting = true;
-  void browser
-    .close()
-    .catch(console.error)
-    .finally(() => {
-      browserClosed = true;
-      app.quit();
-    });
+  jobs?.stop();
 });
 app.on('window-all-closed', () => {
   app.quit();

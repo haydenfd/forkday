@@ -6,7 +6,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev --watch",
     "build": "pnpm typecheck && electron-vite build",
     "start": "electron-vite preview",
     "lint": "eslint .",

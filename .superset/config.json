@@ -1,3 +1,7 @@
 {
+  "setup": [
+    "pnpm install --frozen-lockfile",
+    "pnpm exec install-electron"
+  ],
   "run": ["pnpm dev"]
 }
