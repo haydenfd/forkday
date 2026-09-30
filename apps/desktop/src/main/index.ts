@@ -54,6 +54,8 @@ function registerIpc(): void {
       browser.setVisible(true);
       await browser.open(url);
     },
+    'browser:visible': (visible: unknown) =>
+      browser.setVisible(visible === true),
     'jobs:list': () => jobs.list(),
     'jobs:add': (url: unknown) => jobs.add(url),
     'jobs:show': (id: unknown) => jobs.show(id),

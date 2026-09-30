@@ -2,6 +2,9 @@ import { WebContentsView, type BrowserWindow } from 'electron';
 
 import { validateBrowserUrl } from './browserUrl';
 
+// Height of the renderer's top bar (`h-14` in App.tsx); the page sits below it.
+const TOP_BAR_HEIGHT = 56;
+
 export class BrowserManager {
   private view?: WebContentsView;
   private visible = false;
@@ -68,6 +71,11 @@ export class BrowserManager {
     if (!this.view || this.window.isDestroyed()) return;
     const [width, height] = this.window.getContentSize();
     const sidebar = Math.floor(width / 2);
-    this.view.setBounds({ x: sidebar, y: 0, width: width - sidebar, height });
+    this.view.setBounds({
+      x: sidebar,
+      y: TOP_BAR_HEIGHT,
+      width: width - sidebar,
+      height: height - TOP_BAR_HEIGHT,
+    });
   }
 }

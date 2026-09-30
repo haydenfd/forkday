@@ -42,6 +42,7 @@ export interface Job {
 
 export interface ForkdayApi {
   openBrowser(url: string): Promise<void>;
+  setBrowserVisible(visible: boolean): Promise<void>;
   listJobs(): Promise<Job[]>;
   addJob(url: string): Promise<Job[]>;
   showJob(id: string): Promise<void>;
