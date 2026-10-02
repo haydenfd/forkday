@@ -23,7 +23,7 @@ export function SaveChangesDialog({
       ref={dialog}
       aria-labelledby="save-changes-title"
       aria-describedby="save-changes-description"
-      className="fixed m-auto w-[min(30rem,calc(100vw-2rem))] max-w-none rounded-xl border bg-card p-6 text-foreground shadow-xl backdrop:bg-black/60"
+      className="save-dialog fixed m-auto w-[min(30rem,calc(100vw-2rem))] max-w-none rounded-xl border bg-card p-6 text-foreground shadow-xl backdrop:bg-black/60"
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onCancel();

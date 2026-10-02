@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { LoaderCircle, RefreshCw } from 'lucide-react';
 
 import type { ModelResponse, ProviderHealth } from '../../shared/contracts';
 import { Button } from '@/components/ui/button';
@@ -8,17 +9,18 @@ import { cn } from '@/lib/utils';
 export default function CodexSettings(): React.JSX.Element {
   const [health, setHealth] = useState<ProviderHealth>();
   const [result, setResult] = useState<string>();
-  const [busy, setBusy] = useState(false);
+  const [action, setAction] = useState<'refresh' | 'test' | 'authenticate'>();
+  const busy = action !== undefined;
 
   const refresh = useCallback(async (): Promise<void> => {
-    setBusy(true);
+    setAction('refresh');
     setResult(undefined);
     try {
       setHealth(await window.forkday.getProviderStatus());
     } catch (error) {
       setResult(errorMessage(error));
     } finally {
-      setBusy(false);
+      setAction(undefined);
     }
   }, []);
 
@@ -27,7 +29,7 @@ export default function CodexSettings(): React.JSX.Element {
   }, [refresh]);
 
   const testProvider = async (): Promise<void> => {
-    setBusy(true);
+    setAction('test');
     setResult(undefined);
     try {
       const response: ModelResponse = await window.forkday.testProvider();
@@ -35,18 +37,19 @@ export default function CodexSettings(): React.JSX.Element {
     } catch (error) {
       setResult(errorMessage(error));
     } finally {
-      setBusy(false);
+      setAction(undefined);
     }
   };
 
   const authenticate = async (): Promise<void> => {
-    setBusy(true);
+    setAction('authenticate');
+    setResult(undefined);
     try {
       setResult((await window.forkday.authenticate()).message);
     } catch (error) {
       setResult(errorMessage(error));
     } finally {
-      setBusy(false);
+      setAction(undefined);
     }
   };
 
@@ -55,7 +58,7 @@ export default function CodexSettings(): React.JSX.Element {
       <div className="max-w-2xl">
         <section>
           <h2 className="eyebrow mb-3">Codex connection</h2>
-          <Card className="p-6" aria-busy={!health || busy}>
+          <Card className="p-6" aria-busy={busy}>
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-base font-semibold tracking-tight">
                 Provider status
@@ -83,7 +86,10 @@ export default function CodexSettings(): React.JSX.Element {
               </p>
             )}
             <p className="mt-4 rounded-lg bg-secondary px-4 py-3 text-sm text-muted-foreground">
-              {health?.usageInformation ?? 'Checking Codex…'}
+              {health?.usageInformation ??
+                (busy
+                  ? 'Checking Codex…'
+                  : 'Connection status unavailable. Check again to retry.')}
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <Button
@@ -92,7 +98,11 @@ export default function CodexSettings(): React.JSX.Element {
                 onClick={() => void refresh()}
                 disabled={busy}
               >
-                Check again
+                <RefreshCw
+                  aria-hidden
+                  className={action === 'refresh' ? 'animate-spin' : undefined}
+                />
+                {action === 'refresh' ? 'Checking…' : 'Check again'}
               </Button>
               {health?.installed && !health.authenticated && (
                 <Button
@@ -101,7 +111,12 @@ export default function CodexSettings(): React.JSX.Element {
                   onClick={() => void authenticate()}
                   disabled={busy}
                 >
-                  Authenticate
+                  {action === 'authenticate' && (
+                    <LoaderCircle aria-hidden className="animate-spin" />
+                  )}
+                  {action === 'authenticate'
+                    ? 'Authenticating…'
+                    : 'Authenticate'}
                 </Button>
               )}
               <Button
@@ -109,7 +124,10 @@ export default function CodexSettings(): React.JSX.Element {
                 onClick={() => void testProvider()}
                 disabled={busy || !health?.authenticated}
               >
-                Test Codex
+                {action === 'test' && (
+                  <LoaderCircle aria-hidden className="animate-spin" />
+                )}
+                {action === 'test' ? 'Testing…' : 'Test Codex'}
               </Button>
             </div>
             {result && (
