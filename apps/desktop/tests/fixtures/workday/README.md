@@ -37,9 +37,10 @@ its input or button.
 Observed device choices: Home and Mobile. The country-code control is a
 searchable prompt, not a plain text field; its selected label was
 `United States of America (+1)`. Profile stores this label separately from the
-address country and the national phone number. Profile's country-code text input
-stores the corresponding country label without maintaining a copied country
-directory. Extension is optional. Existing `phone` values are preserved.
+address country and the national phone number. Profile exposes a disabled
+`🇺🇸 +1 US` country field and a number field; saving supplies
+`United States of America (+1)`, Mobile, and no extension. Numbers are stored as
+entered without automatic formatting.
 
 Use the device button's `aria-controls` to scope its listbox: a global
 `[role=option]` locator also matches the selected country-code pill. The country

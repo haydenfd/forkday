@@ -112,18 +112,18 @@ never submits to a live Workday site.
 ## Local profile
 
 The Profile icon at the top right opens a full-width form with Personal details,
-Address, Phone, and Links sections. Settings also links to Profile. All fields
-are optional; email and URLs are validated when provided. Save reports validation
+Address, Phone, and Links sections. Settings also links to Profile. All fields except URLs
+are required and marked with an asterisk; email and URLs are validated. Save reports validation
 errors or **Saved** and writes `profile.json` atomically in Electron's user-data
 directory. Missing files load as an empty profile; invalid existing files are
 reported and preserved rather than overwritten.
 
-The Phone section matches the inspected Workday fields: Home/Mobile device type,
-country calling-code label, national number, and optional extension. Ten-digit
-numbers format automatically as `(202) 555-0123`; Profile saves the digits
-separately from the calling code. Phone data survives restarting the app.
-The country-code field stores a Workday label such as
-`United States of America (+1)` rather than a copied country directory.
+The Phone section pairs a disabled `🇺🇸 +1 US` country field with the national
+phone number. The country is fixed to United States of America (+1) for now.
+Phone numbers are saved as entered, without automatic formatting. Device type
+is always Mobile and extension is omitted. Phone data survives restarting the
+app. Older incomplete profiles still load; complete the required fields before
+saving.
 
 Profile data is local plaintext, separate from encrypted account passwords.
 New profile and credential files are created with owner-only permissions on

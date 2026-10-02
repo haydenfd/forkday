@@ -27,6 +27,9 @@ const launch = async () => {
     timeout: 15000,
   });
   shell = await app.firstWindow();
+  await app.evaluate(({ BrowserWindow }) => {
+    for (const window of BrowserWindow.getAllWindows()) window.hide();
+  });
   await app
     .context()
     .route('https://*.myworkdayjobs.com/**', (route) =>
@@ -121,17 +124,56 @@ try {
   );
   await shell.getByRole('link', { name: 'Profile', exact: true }).click();
   await shell
-    .getByLabel('Email', { exact: true })
+    .getByLabel('Email *', { exact: true })
     .fill('candidate@example.com');
   await shell.getByRole('group', { name: 'Phone', exact: true }).waitFor();
-  await shell
-    .getByLabel('Phone Device Type', { exact: true })
-    .selectOption('Home');
-  await shell
-    .getByLabel('Country / Territory Phone Code', { exact: true })
-    .fill('United States of America (+1)');
-  await shell.getByLabel('Phone Number', { exact: true }).fill('2025550123');
-  await shell.getByLabel('Phone Extension', { exact: true }).fill('42');
+  await shell.getByRole('button', { name: 'Save', exact: true }).click();
+  assert.equal(
+    await shell
+      .getByLabel('First name *', { exact: true })
+      .evaluate((input) => input.validity.valueMissing),
+    true,
+  );
+  for (const [label, value] of Object.entries({
+    'First name': 'Ada',
+    'Last name': 'Lovelace',
+    'Address line 1': '1 Main St',
+    City: 'Example City',
+    State: 'DC',
+    'Postal code': '20001',
+    Country: 'United States of America',
+  }))
+    await shell.getByLabel(`${label} *`, { exact: true }).fill(value);
+  assert.equal(
+    await shell.getByLabel('Phone Device Type', { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await shell.getByLabel('Phone Extension', { exact: true }).count(),
+    0,
+  );
+  const phoneCountry = shell.getByLabel('Country / Territory Phone Code *', {
+    exact: true,
+  });
+  assert.equal((await phoneCountry.innerText()).trim(), '🇺🇸 +1 US');
+  assert.equal(await phoneCountry.isDisabled(), true);
+  await shell.getByLabel('Phone Number *', { exact: true }).fill('2025550123');
+  assert.equal(
+    await shell.getByLabel('Phone Number *', { exact: true }).inputValue(),
+    '2025550123',
+  );
+  assert.deepEqual(
+    await shell.locator('form input').evaluateAll((inputs) =>
+      inputs
+        .filter((input) => !input.validity.valid)
+        .map((input) => ({
+          id: input.id,
+          value: input.value,
+          message: input.validationMessage,
+        })),
+    ),
+    [],
+  );
   await shell.getByRole('button', { name: 'Save', exact: true }).click();
   await shell
     .getByRole('status')
@@ -141,18 +183,26 @@ try {
     JSON.parse(await readFile(`${profile}/profile.json`, 'utf8')),
     {
       email: 'candidate@example.com',
-      phoneDeviceType: 'Home',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      addressLine1: '1 Main St',
+      city: 'Example City',
+      state: 'DC',
+      postalCode: '20001',
+      country: 'United States of America',
+      phoneDeviceType: 'Mobile',
       phoneCountryCode: 'United States of America (+1)',
       phone: '2025550123',
-      phoneExtension: '42',
     },
   );
-  await shell.getByLabel('Email', { exact: true }).fill('invalid');
+  await shell.getByLabel('Email *', { exact: true }).fill('invalid');
   await shell.getByRole('button', { name: 'Save', exact: true }).click();
-  await shell
-    .getByRole('alert')
-    .filter({ hasText: 'email' })
-    .waitFor({ timeout: 5000 });
+  assert.equal(
+    await shell
+      .getByLabel('Email *', { exact: true })
+      .evaluate((input) => input.validity.typeMismatch),
+    true,
+  );
   await shell.getByRole('link', { name: 'forkday', exact: true }).click();
   let firstFingerprint;
   for (const [index, kind] of [
@@ -192,10 +242,18 @@ try {
   const firstRow = shell.getByRole('row').filter({
     has: shell.getByRole('cell', { name: 'company0', exact: true }),
   });
+  const hiddenBounds = await firstRow
+    .locator('td, button')
+    .evaluateAll((elements) =>
+      elements.map((element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      }),
+    );
   await firstRow
     .getByRole('button', { name: /^Show password/ })
     .click({ timeout: 5000 });
-  const visiblePassword = firstRow.locator('span.font-mono');
+  const visiblePassword = firstRow.locator('span.font-mono:not([aria-label])');
   await visiblePassword.waitFor({ timeout: 5000 });
   assert.equal(
     Array.from(
@@ -206,6 +264,15 @@ try {
     firstFingerprint,
   );
   assert.equal(await shell.getByLabel('Password hidden').count(), 3);
+  assert.deepEqual(
+    await firstRow.locator('td, button').evaluateAll((elements) =>
+      elements.map((element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      }),
+    ),
+    hiddenBounds,
+  );
   await firstRow
     .getByRole('button', { name: /^Hide password/ })
     .click({ timeout: 5000 });
@@ -242,24 +309,16 @@ try {
   await launch();
   await shell.getByRole('link', { name: 'Profile', exact: true }).click();
   await shell.getByRole('button', { name: 'Save', exact: true }).waitFor();
-  await shell.getByLabel('Phone Number', { exact: true }).click();
-  assert.equal(
-    await shell.getByLabel('Phone Device Type', { exact: true }).inputValue(),
-    'Home',
-  );
+  await shell.getByLabel('Phone Number *', { exact: true }).click();
   assert.equal(
     await shell
-      .getByLabel('Country / Territory Phone Code', { exact: true })
-      .inputValue(),
-    'United States of America (+1)',
+      .getByLabel('Country / Territory Phone Code *', { exact: true })
+      .innerText(),
+    '🇺🇸 +1 US',
   );
   assert.equal(
-    await shell.getByLabel('Phone Number', { exact: true }).inputValue(),
-    '(202) 555-0123',
-  );
-  assert.equal(
-    await shell.getByLabel('Phone Extension', { exact: true }).inputValue(),
-    '42',
+    await shell.getByLabel('Phone Number *', { exact: true }).inputValue(),
+    '2025550123',
   );
   await shell.getByRole('link', { name: 'forkday', exact: true }).click();
   await open('company0', 'sign_in');
@@ -274,7 +333,11 @@ try {
   );
   // Another company and another email must receive different passwords.
   await shell.evaluate(() =>
-    window.forkday.saveProfile({ email: 'other@example.com' }),
+    window.forkday
+      .getProfile()
+      .then((profile) =>
+        window.forkday.saveProfile({ ...profile, email: 'other@example.com' }),
+      ),
   );
   await open('company0', 'sign_in');
   assert.notEqual(
