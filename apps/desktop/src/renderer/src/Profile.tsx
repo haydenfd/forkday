@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import {
-  ProfileSchema,
+  CompleteProfileSchema,
+  US_PHONE_COUNTRY_CODE,
   type Profile as ProfileData,
 } from '../../shared/profile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatPhoneNumber } from '../../shared/phone';
 
 const sections: {
   title: string;
@@ -14,9 +15,7 @@ const sections: {
     label: string;
     type?: string;
     wide?: boolean;
-    options?: string[];
     placeholder?: string;
-    hint?: string;
   }[];
 }[] = [
   {
@@ -41,28 +40,14 @@ const sections: {
     title: 'Phone',
     fields: [
       {
-        name: 'phoneDeviceType',
-        label: 'Phone Device Type',
-        options: ['Home', 'Mobile'],
-      },
-      {
         name: 'phoneCountryCode',
         label: 'Country / Territory Phone Code',
-        placeholder: 'United States of America (+1)',
-        hint: 'Use the country label and calling code shown in Workday.',
       },
       {
         name: 'phone',
         label: 'Phone Number',
         type: 'tel',
-        placeholder: '(202) 555-0123',
-        hint: 'Formatting is automatic; the country calling code is saved separately.',
-      },
-      {
-        name: 'phoneExtension',
-        label: 'Phone Extension',
-        type: 'tel',
-        hint: 'Optional.',
+        placeholder: '2025550123',
       },
     ],
   },
@@ -95,7 +80,12 @@ export default function Profile(): React.JSX.Element {
 
   const save = async (): Promise<void> => {
     setMessage(undefined);
-    const parsed = ProfileSchema.safeParse(profile);
+    const parsed = CompleteProfileSchema.safeParse({
+      ...profile,
+      phoneDeviceType: 'Mobile',
+      phoneCountryCode: US_PHONE_COUNTRY_CODE,
+      phoneExtension: undefined,
+    });
     if (!parsed.success) {
       setMessage(
         parsed.error.issues
@@ -119,11 +109,10 @@ export default function Profile(): React.JSX.Element {
     <section className="w-full">
       <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Your details saved on this computer.
+        Required fields are marked *. Links are optional.
       </p>
       <form
         className="mt-8 grid gap-6 @4xl:grid-cols-2"
-        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           void save();
@@ -147,78 +136,51 @@ export default function Profile(): React.JSX.Element {
                   : 'grid gap-4 sm:grid-cols-2'
               }
             >
-              {fields.map(
-                ({ name, label, type, wide, options, placeholder, hint }) => (
-                  <div
-                    key={name}
-                    className={
-                      wide && title !== 'Links'
-                        ? 'space-y-2 sm:col-span-2'
-                        : 'space-y-2'
-                    }
+              {fields.map(({ name, label, type, wide, placeholder }) => (
+                <div
+                  key={name}
+                  className={
+                    wide && title !== 'Links'
+                      ? 'min-w-0 space-y-2 sm:col-span-2'
+                      : 'min-w-0 space-y-2'
+                  }
+                >
+                  <label
+                    className="text-sm font-medium"
+                    htmlFor={`profile-${name}`}
                   >
-                    <label
-                      className="text-sm font-medium"
-                      htmlFor={`profile-${name}`}
+                    {label}
+                    {type !== 'url' && <span aria-hidden="true"> *</span>}
+                  </label>
+                  {name === 'phoneCountryCode' ? (
+                    <Button
+                      id={`profile-${name}`}
+                      type="button"
+                      variant="outline"
+                      disabled
+                      className="w-full justify-between px-3 font-normal"
                     >
-                      {label}
-                    </label>
-                    {options ? (
-                      <select
-                        id={`profile-${name}`}
-                        className="h-9 w-full rounded-lg border border-input bg-card px-3 py-1 text-sm focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={profile[name] ?? ''}
-                        onChange={(event) => {
-                          setProfile({
-                            ...profile,
-                            [name]: event.target.value || undefined,
-                          });
-                          setMessage(undefined);
-                        }}
-                      >
-                        <option value="">Select One</option>
-                        {options.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Input
-                        id={`profile-${name}`}
-                        type={type ?? 'text'}
-                        placeholder={placeholder}
-                        aria-describedby={
-                          hint ? `profile-${name}-hint` : undefined
-                        }
-                        value={
-                          name === 'phone'
-                            ? formatPhoneNumber(profile.phone ?? '')
-                            : (profile[name] ?? '')
-                        }
-                        onChange={(event) => {
-                          setProfile({
-                            ...profile,
-                            [name]:
-                              (name === 'phone'
-                                ? event.target.value.replace(/\D/g, '')
-                                : event.target.value) || undefined,
-                          });
-                          setMessage(undefined);
-                        }}
-                      />
-                    )}
-                    {hint && (
-                      <p
-                        id={`profile-${name}-hint`}
-                        className="text-xs text-muted-foreground"
-                      >
-                        {hint}
-                      </p>
-                    )}
-                  </div>
-                ),
-              )}
+                      <span>🇺🇸 +1 US</span>
+                      <ChevronDown aria-hidden="true" />
+                    </Button>
+                  ) : (
+                    <Input
+                      id={`profile-${name}`}
+                      type={type ?? 'text'}
+                      placeholder={placeholder}
+                      required={type !== 'url'}
+                      value={profile[name] ?? ''}
+                      onChange={(event) => {
+                        setProfile({
+                          ...profile,
+                          [name]: event.target.value || undefined,
+                        });
+                        setMessage(undefined);
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
             </div>
           </fieldset>
         ))}

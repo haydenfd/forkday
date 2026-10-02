@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { ProfileSchema, type Profile } from '../shared/profile.ts';
+import {
+  CompleteProfileSchema,
+  ProfileSchema,
+  type Profile,
+} from '../shared/profile.ts';
 
 export class ProfileStore {
   private readonly file: string;
@@ -30,7 +34,7 @@ export class ProfileStore {
   }
 
   async save(value: unknown): Promise<void> {
-    const profile = ProfileSchema.parse(value);
+    const profile = CompleteProfileSchema.parse(value);
     await this.load();
     await fs.mkdir(this.directory, { recursive: true });
     const temporary = `${this.file}.${randomUUID()}.tmp`;
