@@ -1,392 +1,428 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
-
-import type { Job } from '../../shared/contracts';
+import { ClipboardList, Plus, Search } from 'lucide-react';
+import {
+  type Application,
+  type ApplicationStatus,
+} from '../../shared/applications';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Monogram } from '@/components/ui/monogram';
+import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import Settings from './Settings';
+import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
-// Parked: the job queue UI. Not rendered right now (App shows the single
-// URL + browser split instead). Render <JobsDashboard /> from main.tsx to restore.
+const statuses = [
+  {
+    id: 'waiting',
+    label: 'Waiting',
+    description: 'Saved jobs you plan to apply to.',
+    variant: 'warning',
+  },
+  {
+    id: 'continuing',
+    label: 'Continuing',
+    description: 'Applications in progress or awaiting a response.',
+    variant: 'active',
+  },
+  {
+    id: 'rejected',
+    label: 'Rejected',
+    description: 'Applications that did not move forward.',
+    variant: 'destructive',
+  },
+  {
+    id: 'completed',
+    label: 'Completed',
+    description: 'Finished applications.',
+    variant: 'success',
+  },
+  {
+    id: 'stopped',
+    label: 'Stopped',
+    description: 'Applications paused or stopped by you.',
+    variant: 'warning',
+  },
+] as const;
 
-// ponytail: hash routes, swap for TanStack Router once there are more pages
-const SETTINGS_ROUTE = '#/settings';
-
-export default function JobsDashboard(): React.JSX.Element {
-  const [route, setRoute] = useState(location.hash);
-  const [jobUrl, setJobUrl] = useState('');
-  const [jobs, setJobs] = useState<Job[]>([]);
+export default function JobsDashboard({
+  route,
+}: {
+  route: string;
+}): React.JSX.Element {
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [filter, setFilter] = useState<ApplicationStatus | 'history'>(
+    'waiting',
+  );
+  const [search, setSearch] = useState('');
+  const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [company, setCompany] = useState('');
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string>();
+  const [message, setMessage] = useState<string>();
   const [selectedId, setSelectedId] = useState<string>();
-  const [jobBusy, setJobBusy] = useState(false);
-  const [jobError, setJobError] = useState<string>();
-  const selected = jobs.find((job) => job.id === selectedId);
-  const active = jobs.find((job) => isLive(job.status));
-  const browserVisible = selected && isLive(selected.status);
-  const queued = jobs.filter((job) => job.status === 'queued');
-  const finished = jobs.filter(
-    (job) => job.status === 'completed' || job.status === 'failed',
+  const [notes, setNotes] = useState('');
+  const selected = applications.find((item) => item.id === selectedId);
+  const notesDirty = Boolean(selected && notes !== selected.notes);
+  useUnsavedChanges(notesDirty);
+  const canDiscardNotes = (): boolean =>
+    !notesDirty || window.confirm('Discard your unsaved application notes?');
+  const visible = applications.filter(
+    (item) =>
+      (item.status === filter ||
+        (filter === 'history' &&
+          !['waiting', 'continuing'].includes(item.status))) &&
+      `${item.title} ${item.company} ${item.url}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   );
 
   useEffect(() => {
-    let disposed = false;
-    const refreshJobs = async (): Promise<void> => {
-      try {
-        const next = await window.forkday.listJobs();
-        if (!disposed) setJobs(next);
-      } catch (error) {
-        if (!disposed) setJobError(errorMessage(error));
-      }
-    };
-    void refreshJobs();
-    const timer = setInterval(() => void refreshJobs(), 1000);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-    };
-  }, []);
-
-  const addJob = async (): Promise<void> => {
-    setJobBusy(true);
-    setJobError(undefined);
+    void window.forkday
+      .listApplications()
+      .then((items) => {
+        setApplications(items);
+        const requested = route.split('/')[2];
+        const selected = items.find((item) => item.id === requested);
+        if (selected) {
+          setSelectedId(selected.id);
+          setNotes(selected.notes);
+          setFilter(selected.status);
+        } else if (requested === 'history') setFilter('history');
+        else if (statuses.some((status) => status.id === requested))
+          setFilter(requested as ApplicationStatus);
+      })
+      .catch((error: unknown) => setError(errorMessage(error)))
+      .finally(() => setBusy(false));
+  }, [route]);
+  const add = async (): Promise<void> => {
+    setBusy(true);
+    setError(undefined);
+    setMessage(undefined);
     try {
-      setJobs(await window.forkday.addJob(jobUrl));
-      setJobUrl('');
+      setApplications(
+        await window.forkday.addApplication({
+          url: url.trim(),
+          title,
+          company,
+        }),
+      );
+      setUrl('');
+      setTitle('');
+      setCompany('');
+      setFilter('waiting');
+      setSearch('');
+      setMessage('Job added to Waiting.');
     } catch (error) {
-      setJobError(errorMessage(error));
+      setError(errorMessage(error));
     } finally {
-      setJobBusy(false);
+      setBusy(false);
     }
   };
-
-  const showJob = async (id: string): Promise<void> => {
+  const update = async (
+    id: string,
+    patch: { status?: ApplicationStatus; notes?: string },
+  ): Promise<void> => {
+    setBusy(true);
+    setError(undefined);
+    setMessage(undefined);
     try {
-      await window.forkday.showJob(id);
-      setSelectedId(id);
-      setJobError(undefined);
+      setApplications(await window.forkday.updateApplication({ id, ...patch }));
+      if (patch.status) {
+        setFilter(patch.status);
+        setSelectedId(undefined);
+        setMessage(
+          `Moved to ${statuses.find((item) => item.id === patch.status)?.label}.`,
+        );
+      } else setMessage('Notes saved.');
     } catch (error) {
-      setJobError(errorMessage(error));
-    }
-  };
-
-  const showDashboard = async (): Promise<void> => {
-    try {
-      await window.forkday.showDashboard();
-      setSelectedId(undefined);
-      setJobError(undefined);
-    } catch (error) {
-      setJobError(errorMessage(error));
-    }
-  };
-
-  // Any navigation leaves the job workspace and hides the embedded browser.
-  useEffect(() => {
-    const onHashChange = (): void => {
-      setRoute(location.hash);
-      void showDashboard();
-    };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
-
-  const completeJob = async (): Promise<void> => {
-    if (!selected) return;
-    setJobBusy(true);
-    try {
-      setJobs(await window.forkday.completeJob(selected.id));
-      setSelectedId(undefined);
-    } catch (error) {
-      setJobError(errorMessage(error));
+      setError(errorMessage(error));
     } finally {
-      setJobBusy(false);
+      setBusy(false);
     }
   };
-
-  const onSettings = route === SETTINGS_ROUTE;
 
   return (
-    <div className={cn('min-h-screen', browserVisible ? 'w-1/2' : 'w-full')}>
-      <nav className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-card/80 px-8 backdrop-blur">
-        <a href="#/" className="text-lg font-semibold tracking-tight">
-          forkday
-        </a>
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'text-muted-foreground',
-            onSettings && 'bg-secondary text-foreground',
-          )}
+    <section className="mx-auto w-full max-w-6xl">
+      <header className="mb-7">
+        <h1 className="text-2xl font-semibold tracking-tight">Job queue</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Save jobs, track progress, and pick up where you left off. Adding a
+          job saves it locally.
+        </p>
+      </header>
+      <Card className="mb-7 p-5">
+        <h2 className="mb-4 text-base font-semibold">Add a job</h2>
+        <form
+          className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr_auto]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void add();
+          }}
         >
-          <a
-            href={SETTINGS_ROUTE}
-            aria-label="Settings"
-            aria-current={onSettings ? 'page' : undefined}
+          <div className="space-y-2">
+            <label className="block text-sm" htmlFor="queue-url">
+              Job URL *
+            </label>
+            <Input
+              id="queue-url"
+              type="url"
+              required
+              maxLength={8192}
+              placeholder="https://company.myworkdayjobs.com/…"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm" htmlFor="queue-title">
+              Job title
+            </label>
+            <Input
+              id="queue-title"
+              placeholder="Software engineer"
+              maxLength={500}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="block text-sm" htmlFor="queue-company">
+              Company
+            </label>
+            <Input
+              id="queue-company"
+              placeholder="Company name"
+              maxLength={500}
+              value={company}
+              onChange={(event) => setCompany(event.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <Button
+            type="submit"
+            className="self-end"
+            disabled={busy || !url.trim()}
           >
-            <SettingsIcon />
-          </a>
-        </Button>
-      </nav>
-
-      <main className="@container px-8 py-8">
-        {onSettings ? (
-          <Settings />
-        ) : selected ? (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              type="button"
-              className="-ml-3 text-muted-foreground"
-              onClick={() => void showDashboard()}
-            >
-              ← All jobs
-            </Button>
-            <Card className="mt-4 p-6">
-              <div className="flex items-start justify-between gap-4">
-                <Monogram name={selected.title} />
-                <Badge
-                  variant={jobStatusVariant(selected.status)}
-                  dot={isLive(selected.status) && 'pulse'}
-                >
-                  {statusLabel(selected.status)}
-                </Badge>
-              </div>
-              <p className="eyebrow mt-6">Application workspace</p>
-              <h1 className="mt-2 break-words text-2xl font-semibold tracking-tight">
-                {selected.title}
-              </h1>
-              <p className="mt-2 break-all text-sm text-muted-foreground">
-                {selected.url}
+            <Plus />
+            Add job
+          </Button>
+        </form>
+      </Card>
+      <div
+        className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5"
+        role="group"
+        aria-label="Filter applications by status"
+      >
+        {statuses.map(({ id, label, variant }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={filter === id}
+            onClick={() => {
+              if (!canDiscardNotes()) return;
+              setFilter(id);
+              setSelectedId(undefined);
+            }}
+            className={cn(
+              'rounded-xl border p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+              filter === id
+                ? 'border-brand bg-brand-soft'
+                : 'bg-card hover:bg-secondary',
+            )}
+          >
+            <Badge variant={variant}>{label}</Badge>
+            <span className="mt-3 block text-2xl font-semibold">
+              {applications.filter((item) => item.status === id).length}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">
+            {filter === 'history'
+              ? 'Past processed'
+              : statuses.find((item) => item.id === filter)?.label}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {filter === 'history'
+              ? ''
+              : statuses.find((item) => item.id === filter)?.description}
+          </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search
+            aria-hidden
+            className="absolute left-3 top-2.5 size-4 text-muted-foreground"
+          />
+          <Input
+            type="search"
+            aria-label="Search applications"
+            placeholder="Search title or company"
+            className="pl-9"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+      </div>
+      {error && (
+        <p
+          role="alert"
+          className="mb-4 rounded-lg bg-destructive-soft p-4 text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="mb-4 text-sm text-success">
+          {message}
+        </p>
+      )}
+      <div
+        className={cn(
+          'grid items-start gap-5',
+          selected && 'lg:grid-cols-[3fr_2fr]',
+        )}
+      >
+        <div className="space-y-3">
+          {busy && applications.length === 0 ? (
+            <p role="status" className="p-6 text-sm text-muted-foreground">
+              Loading applications…
+            </p>
+          ) : visible.length === 0 ? (
+            <Card className="grid justify-items-center gap-3 border-dashed px-6 py-12 text-center">
+              <ClipboardList className="size-8 text-muted-foreground" />
+              <h3 className="font-semibold">
+                {search ? 'No matching applications' : `No ${filter} jobs yet`}
+              </h3>
+              <p className="max-w-md text-sm text-muted-foreground">
+                {search
+                  ? 'Try another title or company.'
+                  : filter === 'waiting'
+                    ? 'Paste a job URL above to start your queue.'
+                    : 'Move an application here when its status changes.'}
               </p>
-              <div className="mt-6 rounded-lg bg-secondary px-4 py-3 text-sm">
-                {selected.status === 'opening' && (
-                  <p role="status">Opening the job page…</p>
+            </Card>
+          ) : (
+            visible.map((application) => (
+              <Card
+                key={application.id}
+                className={cn(
+                  'p-5',
+                  selectedId === application.id && 'border-brand',
                 )}
-                {selected.status === 'running' && (
-                  <p>
-                    Continue your application in the browser. Mark it complete
-                    when you finish.
-                  </p>
-                )}
-                {selected.status === 'queued' && (
-                  <p>Waiting for the current application to finish.</p>
-                )}
-                {selected.status === 'completed' && (
-                  <p>This application was marked complete.</p>
-                )}
-                {selected.status === 'failed' && (
-                  <p>This application failed.</p>
-                )}
-              </div>
-              {selected.error && (
-                <p className="mt-4 rounded-lg bg-destructive-soft px-4 py-3 text-sm text-destructive">
-                  {selected.error}
-                </p>
-              )}
-              {selected.status === 'running' && (
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="mb-1 text-xs text-muted-foreground">
+                      {application.company}
+                    </p>
+                    <h3 className="break-words text-base font-semibold">
+                      {application.title}
+                    </h3>
+                    <p className="mt-2 break-all text-xs text-muted-foreground">
+                      {application.url}
+                    </p>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Updated{' '}
+                      {new Date(application.updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Select
+                    aria-label={`Status for ${application.title}`}
+                    className="w-36"
+                    value={application.status}
+                    disabled={busy}
+                    options={statuses.map(({ id, label }) => ({
+                      value: id,
+                      label,
+                    }))}
+                    onValueChange={(value) => {
+                      if (canDiscardNotes())
+                        void update(application.id, {
+                          status: value as ApplicationStatus,
+                        });
+                    }}
+                  />
+                </div>
                 <Button
                   type="button"
-                  className="mt-6"
-                  disabled={jobBusy}
-                  onClick={() => void completeJob()}
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 -ml-3"
+                  onClick={() => {
+                    if (selectedId === application.id || !canDiscardNotes())
+                      return;
+                    setSelectedId(application.id);
+                    setNotes(application.notes);
+                  }}
                 >
-                  Mark complete
+                  View details
                 </Button>
-              )}
-            </Card>
-            {active && active.id !== selected.id && (
+              </Card>
+            ))
+          )}
+        </div>
+        {selected && (
+          <Card className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="break-words text-lg font-semibold">
+                {selected.title}
+              </h2>
               <Button
-                variant="outline"
                 type="button"
-                className="mt-4"
-                onClick={() => void showJob(active.id)}
-              >
-                View active application →
-              </Button>
-            )}
-          </>
-        ) : (
-          <div className="grid items-start gap-10 @5xl:grid-cols-2">
-            <div>
-              <header>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  Your applications
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  One active application at a time. Everything else waits in
-                  your queue.
-                </p>
-              </header>
-
-              <form
-                className="mt-6 flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void addJob();
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (canDiscardNotes()) setSelectedId(undefined);
                 }}
               >
-                <label className="sr-only" htmlFor="job-url">
-                  Job URL
-                </label>
-                <Input
-                  id="job-url"
-                  type="url"
-                  required
-                  maxLength={8192}
-                  placeholder="Paste a job URL, e.g. https://company.myworkdayjobs.com/…"
-                  value={jobUrl}
-                  onChange={(event) => setJobUrl(event.target.value)}
-                />
-                <Button type="submit" disabled={jobBusy || !jobUrl.trim()}>
-                  {jobBusy ? 'Adding…' : 'Add job'}
-                </Button>
-              </form>
-
-              <section className="mt-10">
-                <h2 className="eyebrow mb-3">Active application</h2>
-                {active ? (
-                  <Card className="p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <Monogram name={active.title} />
-                      <Badge
-                        variant={jobStatusVariant(active.status)}
-                        dot="pulse"
-                      >
-                        {statusLabel(active.status)}
-                      </Badge>
-                    </div>
-                    <h3 className="mt-4 break-words text-xl font-semibold tracking-tight">
-                      {active.title}
-                    </h3>
-                    <p className="mt-1 truncate text-sm text-muted-foreground">
-                      {active.url}
-                    </p>
-                    <Button
-                      type="button"
-                      className="mt-6"
-                      onClick={() => void showJob(active.id)}
-                    >
-                      Open workspace
-                    </Button>
-                  </Card>
-                ) : (
-                  <p className="rounded-xl border border-dashed px-6 py-8 text-center text-sm text-muted-foreground">
-                    No application running. Add a job to start one.
-                  </p>
-                )}
-              </section>
+                Close
+              </Button>
             </div>
-
-            <div className="flex flex-col gap-10">
-              <section>
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="eyebrow">Up next</h2>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {queued.length} queued
-                  </span>
-                </div>
-                {queued.length === 0 ? (
-                  <p className="rounded-xl border border-dashed px-6 py-8 text-center text-sm text-muted-foreground">
-                    Nothing waiting.
-                  </p>
-                ) : (
-                  <Card className="divide-y overflow-hidden">
-                    {queued.map((job) => (
-                      <JobRow key={job.id} job={job} onOpen={showJob} />
-                    ))}
-                  </Card>
-                )}
-              </section>
-
-              {finished.length > 0 && (
-                <section>
-                  <h2 className="eyebrow mb-3">Recent results</h2>
-                  <Card className="divide-y overflow-hidden">
-                    {finished.map((job) => (
-                      <JobRow key={job.id} job={job} onOpen={showJob} />
-                    ))}
-                  </Card>
-                </section>
-              )}
-            </div>
-          </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {selected.company}
+            </p>
+            <p className="mt-4 break-all text-xs text-muted-foreground">
+              {selected.url}
+            </p>
+            <form
+              className="mt-6 space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void update(selected.id, { notes });
+              }}
+            >
+              <label
+                className="block text-sm font-medium"
+                htmlFor="application-notes"
+              >
+                Application notes
+              </label>
+              <textarea
+                id="application-notes"
+                rows={7}
+                className="field-control resize-y"
+                placeholder="Next steps, recruiter details, interview dates…"
+                maxLength={20000}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                disabled={busy}
+              />
+              <Button type="submit" disabled={busy || notes === selected.notes}>
+                Save notes
+              </Button>
+            </form>
+          </Card>
         )}
-        {jobError && (
-          <p
-            className="mt-6 rounded-lg bg-destructive-soft px-4 py-3 text-sm text-destructive"
-            role="alert"
-          >
-            {jobError}
-          </p>
-        )}
-      </main>
-    </div>
+      </div>
+    </section>
   );
 }
-
-function JobRow({
-  job,
-  onOpen,
-}: {
-  job: Job;
-  onOpen: (id: string) => Promise<void>;
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-secondary/60 focus-visible:bg-secondary focus-visible:outline-none"
-      onClick={() => void onOpen(job.id)}
-    >
-      <Monogram name={job.title} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <strong className="font-medium">{job.title}</strong>
-        <span className="truncate text-xs text-muted-foreground">
-          {job.url}
-        </span>
-      </span>
-      <Badge
-        variant={jobStatusVariant(job.status)}
-        dot={isLive(job.status) && 'pulse'}
-      >
-        {statusLabel(job.status)}
-      </Badge>
-    </button>
-  );
-}
-
-function isLive(status: Job['status']): boolean {
-  return status === 'running' || status === 'opening';
-}
-
-function jobStatusVariant(
-  status: Job['status'],
-): 'active' | 'warning' | 'success' | 'destructive' | 'secondary' {
-  return (
-    {
-      queued: 'secondary',
-      opening: 'warning',
-      running: 'active',
-      completed: 'success',
-      failed: 'destructive',
-    } as const
-  )[status];
-}
-
-function statusLabel(status: Job['status']): string {
-  return {
-    queued: 'Queued',
-    opening: 'Opening',
-    running: 'Active',
-    completed: 'Completed',
-    failed: 'Failed',
-  }[status];
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

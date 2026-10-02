@@ -37,7 +37,7 @@ plugin in `electron.vite.config.ts`.
 
 `pnpm dev` watches all three Electron layers: renderer changes update through
 Vite HMR, preload changes reload the renderer, and main-process changes restart
-Electron automatically. Main-process restarts reset the in-memory job queue.
+Electron automatically. Profile details, resume files, and the application tracker survive restarts.
 
 ## Codex behavior
 
@@ -51,15 +51,14 @@ The current CLI does not expose reliable account usage or rate-limit status prog
 
 ## Browser proof of concept
 
-The home screen is split in two: paste a job URL on the left and it loads in
+The **Browser** page is split in two: paste a job URL on the left and it loads in
 the embedded browser on the right, below the top bar. Until a page loads, the
-right half shows a blank placeholder. The browser hides on **Settings**, **Profile**, and **Saved Credentials** and
+right half shows a blank placeholder. The browser hides on **Tasks**, **Settings**, **Profile**, **Saved Credentials**, **Job queue**, and **Status** and
 returns when you go back.
 
-The job queue dashboard (active, queued, completed, and failed applications) is
-parked in `apps/desktop/src/renderer/src/JobsDashboard.tsx`. It still compiles
-but is not rendered; render it from `main.tsx` to bring it back. The main-process
-`JobQueue` and its IPC are unchanged.
+The home page is **Tasks**, with current work and the five most recently processed
+applications. **See all** opens processed history in the queue; each task links to
+its saved details. Queue records remain independent of browser opening and automation.
 
 The browser uses Electron's `WebContentsView` and a separate persistent session
 (`persist:forkday-jobs`) so logins survive closing and reopening the app. Main
@@ -69,7 +68,7 @@ that request a new window open in the same pane.
 
 Apply starts manually in the browser; Codex's provider test does not
 control the page. Agent browser tools are not connected yet. The application
-queue is in memory and resets when Forkday quits.
+tracker is saved locally and survives closing the app.
 
 Run `pnpm -C apps/desktop test:browser` to verify the split view, embedded
 browser, navigation guards, resize, Settings hide/show, URL validation, and page
@@ -109,30 +108,56 @@ Run `pnpm -C apps/desktop test:account` to check encrypted persistence and accou
 creation/sign-in across an app restart using local Workday fixtures. This check
 never submits to a live Workday site.
 
-## Local profile
+## Settings and local data
 
-The Profile icon at the top right opens a full-width form with Personal details,
-Address, Phone, and Links sections. Settings also links to Profile. All fields except URLs
-are required and marked with an asterisk; email and URLs are validated. Save reports validation
-errors or **Saved** and writes `profile.json` atomically in Electron's user-data
-directory. Missing files load as an empty profile; invalid existing files are
-reported and preserved rather than overwritten.
+Settings has five sections: **Profile**, **Resume**, **Application answers**,
+**Disclosures**, and **Codex**. The Profile shortcut opens the same editor. Each
+editable section has its own top-right **Save**. Leaving an unsaved section offers
+**Save changes**, **Discard**, or **Keep editing**, including Back navigation.
 
-The Phone section pairs a disabled `🇺🇸 +1 US` country field with the national
-phone number. The country is fixed to United States of America (+1) for now.
-Phone numbers are saved as entered, without automatic formatting. Device type
-is always Mobile and extension is omitted. Phone data survives restarting the
-app. Older incomplete profiles still load; complete the required fields before
-saving.
+Profile keeps the required contact and address fields, fixed US calling code,
+and mobile phone behavior. Optional fields include preferred name, address line
+2, and links. The app is scoped to US residents applying in the US; country
+metadata is fixed internally. Save validates the current section and merges it into `profile.json` atomically
+in Electron's user-data directory. Older partial profiles remain readable;
+invalid files are preserved and reported. Resume content, application answers,
+and disclosures can be saved before completing contact information.
 
-Profile data is local plaintext, separate from encrypted account passwords.
-New profile and credential files are created with owner-only permissions on
-POSIX systems, and their names are ignored by Git. Source examples and tests
-use fictional data. Keep real user-data files and browser captures outside
-the repository.
+Resume supports one PDF up to 10 MB. **Upload PDF** copies the file into a local
+`resume/` folder and saves it immediately. **Replace PDF** changes the local copy;
+**Open PDF** opens it with the system PDF viewer. Moving or deleting the original
+file does not affect the saved copy. Editable resume text, skills, work history,
+and education are saved with the profile. PDF upload does not parse text.
 
-Phone setup and documented My Information selectors prepare the next application
-step; My Information autofill and later application steps are not implemented.
+Application answers include US authorization and sponsorship, residency/visa
+status, availability, relocation, and optional salary preferences. All start
+unset. Disclosures are separate and include an
+explicit choice not to answer. [Field selection and research](docs/application-profile.md)
+describe the scope and primary sources.
+
+**Job queue** saves title, company, URL, notes, and **Waiting / Continuing /
+Completed / Rejected / Stopped** status in `applications.json`. Statuses are updated manually. Adding a
+job does not open a browser. **Status** shows setup readiness and application
+counts; it does not show invocation history. Codex connection, authentication,
+and testing are available in the dedicated Codex settings section. Queue status
+changes request system notifications, including waiting, stopped, and idle.
+Clicking a notification brings Forkday's Tasks page forward. On macOS,
+[Electron notifications require a signed app](https://www.electronjs.org/docs/latest/tutorial/notifications)
+and system notification permission. Delivery is not verified in the current
+development app: a native probe returned `UNErrorDomain error 1`. The workspace
+check verifies the notification calls and click behavior with a test double.
+
+Profile data, PDFs, and the application tracker are local plaintext. Account
+passwords remain separate in encrypted storage. New data files have owner-only
+permissions on POSIX systems. Corrupt files and failed writes preserve the last
+saved data. Source examples use fictional data; keep real data and captures
+outside the repository.
+
+Run `pnpm -C apps/desktop test:workspace` to check the settings sections, PDF
+copying, section saves and navigation prompts, custom dropdowns, Tasks/history,
+structured profile, Codex controls, queue transitions/notes, status, and
+persistence across a real Electron restart. It uses a temporary local profile and
+a fixture Codex CLI; it does not call an AI service or submit any application.
 
 ## Limitations
 
@@ -145,4 +170,4 @@ step; My Information autofill and later application steps are not implemented.
 
 - Claude Code provider
 - Chrome extension handoff to the desktop app
-- durable application workflow
+- browser-connected application workflow

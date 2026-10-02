@@ -78,6 +78,10 @@
   @apply text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
 }
 
+@utility field-control {
+  @apply block min-h-9 w-full rounded-lg border border-input bg-card px-3 py-2 text-sm focus-visible:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/15 disabled:cursor-not-allowed disabled:opacity-50;
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -104,3 +104,45 @@ test('older partial profiles stay readable for completion in the form', async (t
   );
   assert.deepEqual(await new ProfileStore(root).load(), { firstName: 'Ada' });
 });
+
+test('section saves work independently and preserve other sections during concurrent writes', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'forkday-profile-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const store = new ProfileStore(root);
+  await Promise.all([
+    store.saveSection({
+      section: 'resume',
+      profile: { resumeText: 'Example resume' },
+    }),
+    store.saveSection({
+      section: 'answers',
+      profile: { authorizedToWork: 'Yes', sponsorshipNow: 'No' },
+    }),
+  ]);
+  assert.deepEqual(await store.load(), {
+    resumeText: 'Example resume',
+    authorizedToWork: 'Yes',
+    sponsorshipNow: 'No',
+    workAuthorizationCountry: 'United States of America',
+  });
+  await store.saveSection({ section: 'profile', profile });
+  assert.equal((await store.load()).resumeText, 'Example resume');
+  await store.saveSection({
+    section: 'resume',
+    profile: { resumeText: undefined },
+  });
+  assert.equal((await store.load()).resumeText, undefined);
+  assert.equal((await store.load()).authorizedToWork, 'Yes');
+  assert.throws(() =>
+    store.saveSection({
+      section: 'resume',
+      profile: { email: 'changed@example.com' },
+    }),
+  );
+  assert.throws(() =>
+    store.saveSection({
+      section: 'profile',
+      profile: { firstName: 'Incomplete' },
+    }),
+  );
+});
