@@ -1,4 +1,10 @@
-import type { Profile } from './profile';
+import type { Profile, ProfileSection } from './profile';
+import type { Resume } from './resume';
+import type {
+  Application,
+  NewApplication,
+  ApplicationUpdate,
+} from './applications';
 
 export type ProviderId = 'codex';
 
@@ -62,6 +68,16 @@ export interface ForkdayApi {
   revealCredentialPassword(origin: string, email: string): Promise<string>;
   getProfile(): Promise<Profile>;
   saveProfile(profile: Profile): Promise<void>;
+  saveProfileSection(
+    section: ProfileSection,
+    profile: Profile,
+  ): Promise<Profile>;
+  getResume(): Promise<Resume | null>;
+  uploadResume(): Promise<Resume | null>;
+  openResume(): Promise<void>;
+  listApplications(): Promise<Application[]>;
+  addApplication(application: NewApplication): Promise<Application[]>;
+  updateApplication(update: ApplicationUpdate): Promise<Application[]>;
   fillAccountForm(): Promise<AccountFormResult>;
   openBrowser(url: string): Promise<void>;
   setBrowserVisible(visible: boolean): Promise<void>;

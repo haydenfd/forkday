@@ -80,7 +80,7 @@ test('saving requires every visible field except links and defaults to Mobile wi
     false,
   );
   for (const field of Object.keys(profile).filter(
-    (field) => field !== 'phoneCountryCode',
+    (field) => !['phoneCountryCode', 'country'].includes(field),
   )) {
     const missing = { ...profile } as Record<string, unknown>;
     delete missing[field];
@@ -102,6 +102,95 @@ test('saving requires every visible field except links and defaults to Mobile wi
   );
   assert.equal(
     CompleteProfileSchema.safeParse({ ...profile, phoneExtension: '42' })
+      .success,
+    false,
+  );
+});
+
+test('resume and application answers persist without guessing unset or declined choices', () => {
+  const fields = {
+    resumeText: 'Example resume',
+    skills: 'TypeScript, writing',
+    workExperience: [
+      {
+        id: crypto.randomUUID(),
+        company: 'Example',
+        jobTitle: 'Engineer',
+        startDate: '2023-01',
+        current: true,
+      },
+    ],
+    education: [
+      {
+        id: crypto.randomUUID(),
+        school: 'Example University',
+        degree: 'BS',
+        startDate: '2018-09',
+        endDate: '2022-06',
+      },
+    ],
+    workAuthorizationCountry: 'United States',
+    authorizedToWork: 'Yes',
+    sponsorshipNow: 'No',
+    sponsorshipFuture: 'Yes',
+    disability: 'Prefer not to answer',
+    protectedVeteran: 'No',
+    availableStartDate: '2026-11-01',
+  };
+  assert.deepEqual(ProfileSchema.parse(fields), fields);
+  const contact = {
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    email: 'candidate@example.com',
+    phone: '2025550123',
+    addressLine1: '1 Example Street',
+    city: 'Example City',
+    state: 'DC',
+    postalCode: '20001',
+    country: 'United States of America',
+  };
+  assert.equal(
+    CompleteProfileSchema.safeParse({ ...contact, ...fields }).success,
+    true,
+  );
+  assert.equal(
+    CompleteProfileSchema.safeParse({
+      ...contact,
+      ...fields,
+      workAuthorizationCountry: undefined,
+    }).success,
+    true,
+  );
+  assert.deepEqual(ProfileSchema.parse({}), {});
+  assert.equal(
+    ProfileSchema.safeParse({ ...fields, disability: 'Guess' }).success,
+    false,
+  );
+  assert.equal(
+    ProfileSchema.safeParse({
+      ...fields,
+      workExperience: [{ ...fields.workExperience[0], startDate: '2024-14' }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    ProfileSchema.safeParse({
+      ...fields,
+      workExperience: [
+        { ...fields.workExperience[0], current: false, endDate: '2022-01' },
+      ],
+    }).success,
+    false,
+  );
+  assert.equal(
+    ProfileSchema.safeParse({
+      ...fields,
+      workExperience: [{ ...fields.workExperience[0], endDate: '2025-01' }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    ProfileSchema.safeParse({ ...fields, availableStartDate: '2026-02-30' })
       .success,
     false,
   );

@@ -19,3 +19,6 @@ profile.json
 profile.json.*.tmp
 credentials.enc
 credentials.enc.*.tmp
+applications.json
+applications.json.*.tmp
+resume/

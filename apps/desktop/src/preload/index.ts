@@ -8,6 +8,16 @@ const api: ForkdayApi = {
     ipcRenderer.invoke('credentials:reveal', { origin, email }),
   getProfile: () => ipcRenderer.invoke('profile:get'),
   saveProfile: (profile) => ipcRenderer.invoke('profile:save', profile),
+  saveProfileSection: (section, profile) =>
+    ipcRenderer.invoke('profile:save-section', { section, profile }),
+  getResume: () => ipcRenderer.invoke('resume:get'),
+  uploadResume: () => ipcRenderer.invoke('resume:upload'),
+  openResume: () => ipcRenderer.invoke('resume:open'),
+  listApplications: () => ipcRenderer.invoke('applications:list'),
+  addApplication: (application) =>
+    ipcRenderer.invoke('applications:add', application),
+  updateApplication: (update) =>
+    ipcRenderer.invoke('applications:update', update),
   fillAccountForm: () => ipcRenderer.invoke('browser:fill-account'),
   openBrowser: (url) => ipcRenderer.invoke('browser:open', url),
   setBrowserVisible: (visible) =>

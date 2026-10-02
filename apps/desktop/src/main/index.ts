@@ -1,4 +1,12 @@
-import { app, BrowserWindow, ipcMain, shell, safeStorage } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  safeStorage,
+  dialog,
+  Notification,
+} from 'electron';
 import path from 'node:path';
 
 import type { ModelResponse } from '../shared/contracts';
@@ -9,6 +17,10 @@ import { InvocationHistory } from './history';
 import { resolveLoginShellPath } from './path';
 import { ProcessManager } from './processManager';
 import { ProfileStore } from './profileStore';
+import { ResumeStore } from './resumeStore';
+import { ApplicationStore } from './applicationStore';
+import { applicationNotification } from './applicationNotifications';
+import type { Application } from '../shared/applications';
 import { CodexProvider, ProviderError } from './providers/codexProvider';
 
 // Playwright connects only over loopback, using Chromium's ephemeral port.
@@ -17,6 +29,7 @@ app.commandLine.appendSwitch('remote-debugging-port', '0');
 
 const processes = new ProcessManager();
 const history = new InvocationHistory();
+const notifications = new Set<Notification>();
 let provider: CodexProvider;
 let browser: BrowserManager;
 let jobs: JobQueue;
@@ -57,11 +70,71 @@ async function createWindow(): Promise<void> {
 
 function registerIpc(): void {
   const profiles = new ProfileStore(app.getPath('userData'));
+  const resumes = new ResumeStore(app.getPath('userData'));
+  const applications = new ApplicationStore(app.getPath('userData'));
+  const notify = (before: Application[], after: Application[]): void => {
+    const message = applicationNotification(before, after);
+    if (!message || !Notification.isSupported()) return;
+    try {
+      const notification = new Notification(message);
+      notifications.add(notification);
+      const release = (): void => {
+        notifications.delete(notification);
+      };
+      notification.once('close', release);
+      notification.once('failed', (_event, error: string) => {
+        release();
+        console.warn('System notification failed:', error);
+      });
+      notification.once('click', () => {
+        release();
+        const window = BrowserWindow.getAllWindows()[0];
+        if (!window) return;
+        if (window.isMinimized()) window.restore();
+        window.show();
+        window.focus();
+        void window.webContents.executeJavaScript("location.hash = '#/'");
+      });
+      notification.show();
+    } catch (error) {
+      console.warn('System notification failed:', error);
+    }
+  };
   const jobHandlers = {
     'credentials:list': () => credentials.list(),
     'credentials:reveal': (value: unknown) => credentials.revealPassword(value),
     'profile:get': () => profiles.load(),
     'profile:save': (profile: unknown) => profiles.save(profile),
+    'profile:save-section': (value: unknown) => profiles.saveSection(value),
+    'resume:get': () => resumes.load(),
+    'resume:upload': async () => {
+      const selection = await dialog.showOpenDialog({
+        title: 'Choose your resume',
+        properties: ['openFile'],
+        filters: [{ name: 'PDF resume', extensions: ['pdf'] }],
+      });
+      if (selection.canceled || !selection.filePaths[0]) return null;
+      return resumes.import(selection.filePaths[0]);
+    },
+    'resume:open': async () => {
+      const resume = await resumes.load();
+      if (!resume) throw new Error('Upload a resume first.');
+      const error = await shell.openPath(resumes.filePath(resume));
+      if (error) throw new Error(error);
+    },
+    'applications:list': () => applications.list(),
+    'applications:add': async (value: unknown) => {
+      const before = await applications.list();
+      const after = await applications.add(value);
+      notify(before, after);
+      return after;
+    },
+    'applications:update': async (value: unknown) => {
+      const before = await applications.list();
+      const after = await applications.update(value);
+      notify(before, after);
+      return after;
+    },
     'browser:fill-account': async () => {
       const { email } = await profiles.load();
       if (!email) throw new Error('Add your email in Profile.');
