@@ -27,6 +27,7 @@ const launch = async () => {
     timeout: 15000,
   });
   shell = await app.firstWindow();
+  await shell.getByRole('link', { name: 'Browser', exact: true }).click();
   await app.evaluate(({ BrowserWindow }) => {
     for (const window of BrowserWindow.getAllWindows()) window.hide();
   });
@@ -141,7 +142,6 @@ try {
     City: 'Example City',
     State: 'DC',
     'Postal code': '20001',
-    Country: 'United States of America',
   }))
     await shell.getByLabel(`${label} *`, { exact: true }).fill(value);
   assert.equal(
@@ -152,11 +152,12 @@ try {
     await shell.getByLabel('Phone Extension', { exact: true }).count(),
     0,
   );
-  const phoneCountry = shell.getByLabel('Country / Territory Phone Code *', {
-    exact: true,
-  });
-  assert.equal((await phoneCountry.innerText()).trim(), '🇺🇸 +1 US');
-  assert.equal(await phoneCountry.isDisabled(), true);
+  assert.equal(
+    await shell
+      .getByLabel('Country / Territory Phone Code *', { exact: true })
+      .count(),
+    0,
+  );
   await shell.getByLabel('Phone Number *', { exact: true }).fill('2025550123');
   assert.equal(
     await shell.getByLabel('Phone Number *', { exact: true }).inputValue(),
@@ -203,7 +204,11 @@ try {
       .evaluate((input) => input.validity.typeMismatch),
     true,
   );
-  await shell.getByRole('link', { name: 'forkday', exact: true }).click();
+  await shell.getByRole('link', { name: 'Browser', exact: true }).click();
+  await shell
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Discard', exact: true })
+    .click();
   let firstFingerprint;
   for (const [index, kind] of [
     'create_account',
@@ -310,17 +315,12 @@ try {
   await shell.getByRole('link', { name: 'Profile', exact: true }).click();
   await shell.getByRole('button', { name: 'Save', exact: true }).waitFor();
   await shell.getByLabel('Phone Number *', { exact: true }).click();
-  assert.equal(
-    await shell
-      .getByLabel('Country / Territory Phone Code *', { exact: true })
-      .innerText(),
-    '🇺🇸 +1 US',
-  );
+
   assert.equal(
     await shell.getByLabel('Phone Number *', { exact: true }).inputValue(),
     '2025550123',
   );
-  await shell.getByRole('link', { name: 'forkday', exact: true }).click();
+  await shell.getByRole('link', { name: 'Browser', exact: true }).click();
   await open('company0', 'sign_in');
   assert.equal(await check('sign_in'), firstFingerprint);
   for (const kind of ['sign_in_options', 'create_account']) {

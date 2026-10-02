@@ -58,6 +58,8 @@ try {
   };
 
   const page = await app.firstWindow();
+  await page.getByRole('heading', { name: 'Tasks', exact: true }).waitFor();
+  await page.getByRole('link', { name: 'Browser', exact: true }).click();
   const heading = page.getByRole('heading', { name: 'Open a job' });
   await heading.waitFor();
   const shellUrl = page.url();
@@ -114,7 +116,7 @@ try {
     await page.getByRole('heading', { name, exact: true }).waitFor();
     await new Promise((r) => setTimeout(r, 200));
     assert.equal((await browserView()).visible, false);
-    await page.getByRole('link', { name: 'forkday' }).click();
+    await page.getByRole('link', { name: 'Browser', exact: true }).click();
     await heading.waitFor();
     await new Promise((r) => setTimeout(r, 200));
     assert.equal((await browserView()).visible, true);
@@ -136,7 +138,7 @@ try {
     window.location.href = destination;
   }, url);
   await new Promise((resolve) => setTimeout(resolve, 200));
-  assert.equal(page.url().split('#')[0], shellUrl);
+  assert.equal(page.url().split('#')[0], shellUrl.split('#')[0]);
 
   console.log(
     'PASS: app reload, navigation guard, split view, embedded browser, isolation, resize, Settings/Profile/Saved Credentials hide/show, URL validation',
