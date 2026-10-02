@@ -47,7 +47,7 @@ export function Select({
         <SelectPrimitive.Icon asChild>
           <ChevronDown
             aria-hidden
-            className="size-4 shrink-0 text-muted-foreground"
+            className="select-chevron size-4 shrink-0 text-muted-foreground"
           />
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
@@ -56,7 +56,7 @@ export function Select({
           position="popper"
           sideOffset={6}
           collisionPadding={12}
-          className="z-50 max-h-[var(--radix-select-content-available-height)] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border bg-card text-foreground shadow-xl"
+          className="select-menu z-50 max-h-[var(--radix-select-content-available-height)] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border bg-card text-foreground shadow-xl"
         >
           <SelectPrimitive.Viewport className="p-1">
             {options.map((option) => (

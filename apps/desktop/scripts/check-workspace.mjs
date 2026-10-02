@@ -52,6 +52,7 @@ const launch = async () => {
     timeout: 15000,
   });
   page = await app.firstWindow();
+  page.setDefaultTimeout(15000);
   await page.getByRole('heading', { name: 'Tasks', exact: true }).waitFor();
   await app.evaluate(({ Notification }) => {
     globalThis.forkdayNotifications = [];
@@ -166,6 +167,17 @@ try {
     await page.getByText('Recent calls', { exact: true }).count(),
     0,
   );
+  await capture('codex');
+  await page.getByRole('button', { name: 'Check again', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Check again', exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByText('Forkday provider test successful', { exact: true })
+      .count(),
+    0,
+  );
   await navigate('Resume');
   assert.match(
     await page.getByLabel('Resume text', { exact: true }).inputValue(),
@@ -209,6 +221,28 @@ try {
   });
   await authorization.click();
   await capture('dropdown');
+  assert.equal(
+    await page
+      .getByRole('listbox')
+      .evaluate((element) => getComputedStyle(element).animationName),
+    'select-open',
+  );
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(
+    await page
+      .getByRole('listbox')
+      .evaluate((element) => getComputedStyle(element).animationName),
+    'none',
+  );
+  assert.equal(
+    await page
+      .locator('#profile-authorizedToWork .select-chevron')
+      .evaluate(
+        (element) => new DOMMatrix(getComputedStyle(element).transform).a,
+      ),
+    -1,
+  );
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.keyboard.press('Escape');
   assert.equal(await authorization.getAttribute('aria-expanded'), 'false');
   for (const label of [
@@ -269,9 +303,18 @@ try {
     true,
   );
   await save();
+  // Cancelling navigation leaves a duplicate history entry; establish a distinct Back target.
+  await navigate('Application answers');
+  await navigate('Disclosures');
   await page.getByLabel('Gender', { exact: true }).fill('Unsaved response');
   await page.evaluate(() => history.back());
   await page.getByRole('dialog').waitFor();
+  assert.equal(
+    await page
+      .getByRole('dialog')
+      .evaluate((element) => element.contains(document.activeElement)),
+    true,
+  );
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Discard', exact: true })
@@ -426,6 +469,10 @@ try {
   console.log(
     'PASS: custom dropdowns; section-scoped saves and save/discard/keep-editing navigation; Tasks home and processed history; native notification event calls; five settings sections; PDF upload/cancel and independent local copy; experience/education; explicit authorization/disclosure answers; Codex connection/test without invocation history; unsaved-navigation guard; waiting/continuing/rejected queue and notes; status readiness; persistence across a real Electron restart; no queue browser activity.',
   );
+} catch (error) {
+  console.error(error);
+  await capture('failure');
+  throw error;
 } finally {
   await app?.close();
   await rm(root, { recursive: true, force: true });

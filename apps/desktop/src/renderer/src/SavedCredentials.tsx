@@ -142,7 +142,14 @@ export default function SavedCredentials(): React.JSX.Element {
                           disabled={pending !== undefined}
                           onClick={() => void togglePassword(credential)}
                         >
-                          {password ? <EyeOff /> : <Eye />}
+                          <span
+                            className="t-icon-swap"
+                            data-state={password ? 'b' : 'a'}
+                            aria-hidden
+                          >
+                            <Eye className="t-icon" data-icon="a" />
+                            <EyeOff className="t-icon" data-icon="b" />
+                          </span>
                         </Button>
                       </div>
                     </td>

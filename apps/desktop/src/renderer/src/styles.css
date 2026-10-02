@@ -33,7 +33,7 @@
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-border: var(--border);
-  --color-input: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--brand);
 
   --radius-sm: 0.375rem;
@@ -55,12 +55,13 @@
   --card: #202326;
   --secondary: #2a2e32;
   --muted-foreground: #a5abb3;
-  --border: #656d75;
+  --border: #383e44;
+  --input: #69737d;
 
   /* Green marks actions, focus, and selected states */
-  --primary: #4ade80;
+  --primary: #70dda0;
   --primary-foreground: #102218;
-  --brand: #4ade80;
+  --brand: #70dda0;
   --brand-soft: #193c2a;
   --brand-strong: #86efac;
 
@@ -95,5 +96,173 @@
   button:not(:disabled),
   summary {
     cursor: pointer;
+  }
+}
+
+/* Shared interaction timing; only controls react to hover, not static cards. */
+:root {
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  button,
+  a,
+  input,
+  textarea,
+  [role='combobox'] {
+    transition:
+      color var(--duration-quick) ease-out,
+      background-color var(--duration-quick) ease-out,
+      border-color var(--duration-quick) ease-out,
+      box-shadow var(--duration-quick) ease-out;
+  }
+  a:focus-visible,
+  input[type='checkbox']:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+  nav a[aria-current='page']:hover {
+    background-color: var(--brand-soft);
+    color: var(--brand-strong);
+  }
+  @media (hover: hover) {
+    input:not(:disabled):hover,
+    textarea:not(:disabled):hover,
+    [role='combobox']:not(:disabled):hover {
+      border-color: var(--muted-foreground);
+    }
+    main a:hover {
+      color: var(--brand-strong);
+    }
+  }
+}
+
+.ui-button {
+  transition:
+    color var(--duration-quick) ease-out,
+    background-color var(--duration-quick) ease-out,
+    border-color var(--duration-quick) ease-out,
+    box-shadow var(--duration-quick) ease-out,
+    transform var(--duration-quick) var(--ease-smooth-out);
+}
+.ui-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Radix retains closing content until its CSS animation finishes. */
+.select-menu {
+  transform-origin: var(--radix-select-content-transform-origin);
+}
+.select-menu[data-state='open'] {
+  animation: select-open var(--duration-fast) var(--ease-smooth-out);
+}
+.select-menu[data-state='closed'] {
+  animation: select-close var(--duration-quick) var(--ease-smooth-out);
+}
+@keyframes select-open {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes select-close {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+}
+.select-chevron {
+  transition: transform var(--duration-fast) var(--ease-smooth-out);
+}
+[role='combobox'][data-state='open'] > .select-chevron {
+  transform: rotate(180deg);
+}
+
+.save-dialog[open] {
+  animation: dialog-open var(--duration-fast) var(--ease-smooth-out);
+}
+.save-dialog[open]::backdrop {
+  animation: feedback-in var(--duration-fast) ease-out;
+}
+@keyframes dialog-open {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes feedback-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+[role='status'],
+[role='alert'] {
+  animation: feedback-in var(--duration-quick) ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* transitions.dev: icon swap */
+:root {
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+}
+
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--icon-swap-dur) var(--icon-swap-ease),
+    filter var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  will-change: opacity, filter, transform;
+}
+.t-icon-swap[data-state='a'] .t-icon[data-icon='a'],
+.t-icon-swap[data-state='b'] .t-icon[data-icon='b'] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+.t-icon-swap[data-state='a'] .t-icon[data-icon='b'],
+.t-icon-swap[data-state='b'] .t-icon[data-icon='a'] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-icon-swap .t-icon {
+    transition: none !important;
   }
 }

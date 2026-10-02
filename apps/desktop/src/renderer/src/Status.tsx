@@ -99,7 +99,10 @@ export default function Status(): React.JSX.Element {
           disabled={busy}
           onClick={() => void refresh()}
         >
-          <RefreshCw />
+          <RefreshCw
+            aria-hidden
+            className={busy ? 'animate-spin' : undefined}
+          />
           {busy ? 'Checking…' : 'Refresh'}
         </Button>
       </header>
