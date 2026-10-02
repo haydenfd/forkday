@@ -58,10 +58,6 @@ export default function SavedCredentials(): React.JSX.Element {
       <h1 className="text-2xl font-semibold tracking-tight">
         Saved Credentials
       </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Account details saved securely on this computer. Use the eye icon to
-        reveal a password.
-      </p>
       <label htmlFor="credential-search" className="sr-only">
         Search saved credentials
       </label>
@@ -89,17 +85,22 @@ export default function SavedCredentials(): React.JSX.Element {
       )}
       {rows && (
         <div className="mt-6 overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
             <caption className="sr-only">Saved account credentials</caption>
+            <colgroup>
+              <col className="w-1/4" />
+              <col className="w-2/5" />
+              <col />
+            </colgroup>
             <thead className="border-y bg-secondary/50 text-muted-foreground">
               <tr>
-                <th scope="col" className="px-4 py-3 font-medium">
+                <th scope="col" className="break-words px-4 py-3 font-medium">
                   Company
                 </th>
-                <th scope="col" className="px-4 py-3 font-medium">
+                <th scope="col" className="break-words px-4 py-3 font-medium">
                   Email
                 </th>
-                <th scope="col" className="px-4 py-3 font-medium">
+                <th scope="col" className="break-words px-4 py-3 font-medium">
                   Password
                 </th>
               </tr>
@@ -113,22 +114,29 @@ export default function SavedCredentials(): React.JSX.Element {
                     key={`${credential.origin}:${credential.email}`}
                     className="border-b hover:bg-secondary/40"
                   >
-                    <td className="px-4 py-3 font-medium">
+                    <td className="break-words px-4 py-3 font-medium">
                       {credential.company}
                     </td>
-                    <td className="px-4 py-3">{credential.email}</td>
+                    <td className="break-all px-4 py-3">{credential.email}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex h-8 min-w-0 items-center gap-2">
                         {password ? (
-                          <span className="font-mono">{password}</span>
+                          <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono">
+                            {password}
+                          </span>
                         ) : (
-                          <span aria-label="Password hidden">••••••••••••</span>
+                          <span
+                            className="min-w-0 flex-1 font-mono"
+                            aria-label="Password hidden"
+                          >
+                            ••••••••••••
+                          </span>
                         )}
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="text-muted-foreground"
+                          className="shrink-0 text-muted-foreground"
                           aria-label={`${password ? 'Hide' : 'Show'} password for ${credential.company} (${credential.email})`}
                           aria-pressed={Boolean(password)}
                           disabled={pending !== undefined}
