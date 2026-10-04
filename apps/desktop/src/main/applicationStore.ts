@@ -73,6 +73,15 @@ export class ApplicationStore {
     });
   }
 
+  remove(value: unknown): Promise<Application[]> {
+    const id = ApplicationSchema.shape.id.parse(value);
+    return this.change((applications) => {
+      const index = applications.findIndex((item) => item.id === id);
+      if (index < 0) throw new Error('Application not found.');
+      applications.splice(index, 1);
+    });
+  }
+
   private change(
     mutate: (applications: Application[]) => void,
   ): Promise<Application[]> {

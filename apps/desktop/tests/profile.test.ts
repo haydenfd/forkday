@@ -195,3 +195,13 @@ test('resume and application answers persist without guessing unset or declined 
     false,
   );
 });
+
+test('states are stored as two-letter codes, whichever form was saved', async () => {
+  const { stateCode, US_STATES } = await import('../src/shared/profile.ts');
+  assert.equal(Object.keys(US_STATES).length, 52);
+  assert.equal(stateCode('California'), 'CA');
+  assert.equal(stateCode(' ny '), 'NY');
+  assert.equal(stateCode('district of columbia'), 'DC');
+  assert.equal(stateCode('Ontario'), 'Ontario');
+  assert.equal(stateCode(undefined), undefined);
+});

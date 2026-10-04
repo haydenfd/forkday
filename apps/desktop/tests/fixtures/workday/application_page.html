@@ -1,0 +1,146 @@
+<!doctype html>
+<!--
+  Hand-built approximation of a Workday application page, not a capture.
+  Wrapper automation IDs follow the live inspection in README.md; dropdowns
+  mimic Workday's button + aria-controls listbox. Used to test filling rules.
+-->
+<html lang="en">
+  <body>
+    <div data-automation-id="progressBar">My Information</div>
+    <div data-automation-id="formField-source">
+      <label for="source">How Did You Hear About Us?<abbr>*</abbr></label>
+      <button
+        id="source"
+        type="button"
+        aria-haspopup="listbox"
+        data-options="Job Board|Referral"
+      >
+        Select One
+      </button>
+    </div>
+    <fieldset data-automation-id="formField-candidateIsPreviousWorker">
+      <legend>Have you previously worked for Acme?*</legend>
+      <input type="radio" id="prev-yes" name="prev" required /><label
+        for="prev-yes"
+        >Yes</label
+      >
+      <input type="radio" id="prev-no" name="prev" required /><label
+        for="prev-no"
+        >No</label
+      >
+    </fieldset>
+    <div data-automation-id="formField-country">
+      <label for="country">Country / Territory*</label>
+      <button
+        id="country"
+        type="button"
+        aria-haspopup="listbox"
+        data-options="Canada|United States of America"
+      >
+        United States of America
+      </button>
+    </div>
+    <div data-automation-id="formField-legalName--firstName">
+      <label for="first">First Name*</label
+      ><input id="first" aria-required="true" />
+    </div>
+    <div data-automation-id="formField-legalName--lastName">
+      <label for="last">Last Name*</label
+      ><input id="last" value="Existing" aria-required="true" />
+    </div>
+    <div data-automation-id="formField-addressLine1">
+      <label for="line1">Address Line 1*</label
+      ><input id="line1" aria-required="true" />
+    </div>
+    <div data-automation-id="formField-city">
+      <label for="city">City*</label><input id="city" aria-required="true" />
+    </div>
+    <div data-automation-id="formField-countryRegion">
+      <label for="state">State*</label>
+      <button
+        id="state"
+        type="button"
+        aria-haspopup="listbox"
+        data-options="Alabama|California|New York"
+      >
+        Select One
+      </button>
+    </div>
+    <div data-automation-id="formField-postalCode">
+      <label for="zip">Postal Code*</label
+      ><input id="zip" aria-required="true" />
+    </div>
+    <div data-automation-id="formField-phoneType">
+      <label for="phoneType">Phone Device Type*</label>
+      <button
+        id="phoneType"
+        type="button"
+        aria-haspopup="listbox"
+        data-options="Home|Mobile"
+      >
+        Select One
+      </button>
+    </div>
+    <div data-automation-id="formField-phoneNumber">
+      <label for="phone">Phone Number*</label
+      ><input id="phone" type="tel" aria-required="true" />
+    </div>
+    <fieldset data-automation-id="formField-authorized">
+      <legend>Are you legally authorized to work in the United States?*</legend>
+      <input type="radio" id="auth-yes" name="auth" /><label for="auth-yes"
+        >Yes</label
+      >
+      <input type="radio" id="auth-no" name="auth" /><label for="auth-no"
+        >No</label
+      >
+    </fieldset>
+    <div data-automation-id="formField-sponsorship">
+      <label for="sponsor"
+        >Will you now or in the future require sponsorship?*</label
+      >
+      <button
+        id="sponsor"
+        type="button"
+        aria-haspopup="listbox"
+        data-options="Yes|No"
+      >
+        Select One
+      </button>
+    </div>
+    <div data-automation-id="formField-agree">
+      <label for="agree">I agree to the terms*</label
+      ><input id="agree" type="checkbox" required />
+    </div>
+    <input type="file" data-automation-id="file-upload-input-ref" />
+    <button
+      data-automation-id="pageFooterNextButton"
+      onclick="document.body.dataset.next = 'clicked'"
+    >
+      Save and Continue
+    </button>
+    <script>
+      for (const button of document.querySelectorAll(
+        '[aria-haspopup=listbox]',
+      )) {
+        button.addEventListener('click', () => {
+          document.querySelector('[role=listbox]')?.remove();
+          const list = document.createElement('ul');
+          list.role = 'listbox';
+          list.id = `${button.id}-list`;
+          button.setAttribute('aria-controls', list.id);
+          for (const label of button.dataset.options.split('|')) {
+            const option = document.createElement('li');
+            option.role = 'option';
+            option.textContent = label;
+            option.addEventListener('click', () => {
+              button.textContent = label;
+              list.remove();
+            });
+            list.append(option);
+          }
+          setTimeout(() => document.body.append(list), 50);
+        });
+      }
+    </script>
+  </body>
+</html>

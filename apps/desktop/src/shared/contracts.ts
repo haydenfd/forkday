@@ -40,11 +40,33 @@ export interface AuthenticationLaunch {
   message: string;
 }
 
-export interface Job {
+/** Working steps first; `review` and `attention` wait for the user. */
+export type RunStep =
+  'queued' | 'opening' | 'signing_in' | 'filling' | 'review' | 'attention';
+
+/** An application Forkday is applying to in the embedded browser. */
+export interface Run {
   id: string;
-  title: string;
   url: string;
-  status: 'queued' | 'opening' | 'running' | 'completed' | 'failed';
+  title: string;
+  company: string;
+  step: RunStep;
+  detail: string;
+  filled: string[];
+  missing: string[];
+  updatedAt: string;
+}
+
+export interface BridgeStatus {
+  listening: boolean;
+  port: number;
+  error?: string;
+  /** Folder to load as an unpacked/temporary extension. */
+  extensionPath: string;
+}
+
+export interface NotificationTest {
+  shown: boolean;
   error?: string;
 }
 
@@ -81,11 +103,22 @@ export interface ForkdayApi {
   fillAccountForm(): Promise<AccountFormResult>;
   openBrowser(url: string): Promise<void>;
   setBrowserVisible(visible: boolean): Promise<void>;
-  listJobs(): Promise<Job[]>;
-  addJob(url: string): Promise<Job[]>;
-  showJob(id: string): Promise<void>;
-  showDashboard(): Promise<void>;
-  completeJob(id: string): Promise<Job[]>;
+  removeApplication(id: string): Promise<Application[]>;
+  listRuns(): Promise<Run[]>;
+  startRun(id: string): Promise<Run[]>;
+  continueRun(id: string): Promise<Run[]>;
+  finishRun(
+    id: string,
+    outcome: 'completed' | 'stopped' | 'dequeue',
+  ): Promise<Run[]>;
+  /** Subscribe to run changes; returns an unsubscribe function. */
+  onRunsChanged(listener: (runs: Run[]) => void): () => void;
+  /** Main asks the renderer to show a page, e.g. from a notification click. */
+  onNavigate(listener: (route: string) => void): () => void;
+  onNotificationFailed(listener: (message: string) => void): () => void;
+  getBridgeStatus(): Promise<BridgeStatus>;
+  testNotification(): Promise<NotificationTest>;
+  openNotificationSettings(): Promise<void>;
   getProviderStatus(): Promise<ProviderHealth>;
   testProvider(): Promise<ModelResponse>;
   authenticate(): Promise<AuthenticationLaunch>;

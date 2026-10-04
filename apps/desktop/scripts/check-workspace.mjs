@@ -114,11 +114,11 @@ try {
     'Email *': 'candidate@example.com',
     'Address line 1 *': '1 Example Street',
     'City *': 'Example City',
-    'State *': 'DC',
     'Postal code *': '20001',
     'Phone Number *': '2025550123',
   }))
     await page.getByLabel(label, { exact: true }).fill(value);
+  await choose('State', 'District of Columbia (DC)');
   await save();
   await capture('profile');
   await navigate('Resume');
@@ -404,11 +404,9 @@ try {
   );
   await navigate('Tasks');
   await page.getByRole('heading', { name: 'Tasks', exact: true }).waitFor();
-  await page
-    .getByRole('cell', { name: 'Follow up Tuesday', exact: true })
-    .waitFor();
+  await page.getByText(/Follow up Tuesday/).waitFor();
   await capture('tasks');
-  await page.getByRole('link', { name: 'See all →', exact: true }).click();
+  await page.getByRole('link', { name: 'See all', exact: true }).click();
   await page
     .getByRole('heading', { name: 'Past processed', exact: true })
     .waitFor();
@@ -421,7 +419,14 @@ try {
   );
   await navigate('Status');
   await page.getByRole('button', { name: 'Refresh', exact: true }).waitFor();
-  assert.equal(await page.getByText('Ready', { exact: true }).count(), 4);
+  // The extension card is ready unless another Forkday already holds the port.
+  const { listening } = await page.evaluate(() =>
+    window.forkday.getBridgeStatus(),
+  );
+  assert.equal(
+    await page.getByText('Ready', { exact: true }).count(),
+    listening ? 5 : 4,
+  );
   await capture('status');
   await app.evaluate(() => {
     globalThis.forkdayNotificationObjects.at(-1).emit('click');
@@ -467,7 +472,7 @@ try {
     'Yes',
   );
   console.log(
-    'PASS: custom dropdowns; section-scoped saves and save/discard/keep-editing navigation; Tasks home and processed history; native notification event calls; five settings sections; PDF upload/cancel and independent local copy; experience/education; explicit authorization/disclosure answers; Codex connection/test without invocation history; unsaved-navigation guard; waiting/continuing/rejected queue and notes; status readiness; persistence across a real Electron restart; no queue browser activity.',
+    'PASS: custom dropdowns; section-scoped saves and save/discard/keep-editing navigation; Tasks home and processed history; native notification event calls; seven settings sections; PDF upload/cancel and independent local copy; experience/education; explicit authorization/disclosure answers; Codex connection/test without invocation history; unsaved-navigation guard; waiting/continuing/rejected queue and notes; status readiness; persistence across a real Electron restart; no queue browser activity.',
   );
 } catch (error) {
   console.error(error);

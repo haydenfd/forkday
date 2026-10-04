@@ -1,35 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AccountFormResult } from '../../shared/contracts';
-import {
-  Globe,
-  Settings as SettingsIcon,
-  UserRound,
-  FileText,
-} from 'lucide-react';
+import { KeyRound, Settings as SettingsIcon, UserRound } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Logo } from '@/components/ui/logo';
+import { Toaster } from '@/components/ui/toaster';
+import { isWorking, runSteps, useRuns } from '@/lib/runs';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import Settings from './Settings';
 import JobsDashboard from './JobsDashboard';
 import Status from './Status';
 import Tasks from './Tasks';
 import SavedCredentials from './SavedCredentials';
+import Workspace from './Workspace';
 
 // ponytail: hash routes, swap for TanStack Router once there are more pages
 const SETTINGS_ROUTE = '#/settings';
 const PROFILE_ROUTE = '#/profile';
 const CREDENTIALS_ROUTE = '#/credentials';
+// Traffic lights live inside the top bar on macOS (titleBarStyle hiddenInset).
+const MAC = navigator.userAgent.includes('Mac OS');
 
 export default function App(): React.JSX.Element {
   const [route, setRoute] = useState(location.hash);
   const pageMain = useRef<HTMLElement>(null);
-  const [draft, setDraft] = useState('');
-  const [pageUrl, setPageUrl] = useState<string>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>();
-  const [filling, setFilling] = useState(false);
-  const [fillResult, setFillResult] = useState<AccountFormResult>();
+  const runs = useRuns();
   const onSettings =
     route === SETTINGS_ROUTE || route.startsWith(`${SETTINGS_ROUTE}/`);
   const onProfile = route === PROFILE_ROUTE;
@@ -44,7 +40,9 @@ export default function App(): React.JSX.Element {
     !onQueue &&
     !onStatus &&
     !onBrowser;
-  const fullWidth = !onBrowser;
+  // Settings tabs share one page so switching tabs does not replay the page transition.
+  const page = onSettings ? SETTINGS_ROUTE : onQueue ? '#/queue' : route;
+  const activeRun = runs.find((run) => run.step !== 'queued');
 
   useEffect(() => {
     let previousHash = location.hash;
@@ -62,238 +60,154 @@ export default function App(): React.JSX.Element {
       setRoute(location.hash);
     };
     window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    const stopNavigate = window.forkday.onNavigate((next) => {
+      location.hash = next;
+    });
+    let warned = false;
+    const stopFailed = window.forkday.onNotificationFailed(() => {
+      if (warned) return;
+      warned = true;
+      toast(
+        'System notifications are blocked. Turn them on in Settings → Notifications.',
+        'info',
+      );
+    });
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      stopNavigate();
+      stopFailed();
+    };
   }, []);
 
   useEffect(() => {
     pageMain.current?.scrollTo({ top: 0 });
   }, [route]);
 
-  // The browser is a native view layered over the right half; hide it on
-  // pages that use the full width.
+  // The browser is a native view layered over the right half; only the
+  // Browser page shows it.
   useEffect(() => {
-    if (pageUrl) void window.forkday.setBrowserVisible(!fullWidth);
-  }, [fullWidth, pageUrl]);
-
-  const openPage = async (): Promise<void> => {
-    setLoading(true);
-    setFillResult(undefined);
-    setError(undefined);
-    try {
-      await window.forkday.openBrowser(draft);
-      setPageUrl(draft);
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fillAccount = async (): Promise<void> => {
-    setFilling(true);
-    setError(undefined);
-    setFillResult(undefined);
-    try {
-      setFillResult(await window.forkday.fillAccountForm());
-    } catch (error) {
-      setError(errorMessage(error));
-    } finally {
-      setFilling(false);
-    }
-  };
+    void window.forkday.setBrowserVisible(onBrowser);
+  }, [onBrowser]);
 
   return (
     <div className="flex h-screen flex-col">
-      <nav className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-6">
-        <div className="flex items-center gap-5">
-          <a href="#/" className="text-lg font-semibold tracking-tight">
-            forkday
-          </a>
-          <div className="flex gap-1">
-            {[
-              { href: '#/', label: 'Tasks', active: onTasks },
-              { href: '#/browser', label: 'Browser', active: onBrowser },
-              { href: '#/queue', label: 'Job queue', active: onQueue },
-              { href: '#/status', label: 'Status', active: onStatus },
-            ].map(({ href, label, active }) => (
-              <a
-                key={href}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary',
-                  active && 'bg-brand-soft text-brand-strong',
-                )}
+      <header
+        className={cn(
+          'app-drag flex h-14 shrink-0 items-center gap-5 border-b bg-card pr-3',
+          MAC ? 'pl-[104px]' : 'pl-4',
+        )}
+      >
+        <a
+          href="#/"
+          className="flex items-center gap-2.5 rounded-lg text-[0.9375rem] font-semibold tracking-tight"
+        >
+          <Logo />
+          Forkday
+        </a>
+        <nav aria-label="Main" className="flex gap-0.5">
+          {[
+            { href: '#/', label: 'Tasks', active: onTasks },
+            { href: '#/browser', label: 'Browser', active: onBrowser },
+            { href: '#/queue', label: 'Job queue', active: onQueue },
+            { href: '#/status', label: 'Status', active: onStatus },
+          ].map(({ href, label, active }) => (
+            <a
+              key={href}
+              href={href}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+                active && 'bg-secondary text-foreground hover:bg-secondary',
+              )}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center gap-1">
+          {activeRun && !onBrowser && (
+            <a
+              href="#/browser"
+              className="mr-2 flex max-w-64 items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-secondary"
+              title={activeRun.detail}
+            >
+              <Badge
+                variant={runSteps[activeRun.step].variant}
+                dot={isWorking(activeRun) ? 'pulse' : true}
               >
-                {label}
+                {runSteps[activeRun.step].label}
+              </Badge>
+              <span className="truncate text-muted-foreground">
+                {activeRun.company}
+              </span>
+            </a>
+          )}
+          {[
+            {
+              href: CREDENTIALS_ROUTE,
+              label: 'Saved Credentials',
+              icon: KeyRound,
+              active: onCredentials,
+            },
+            {
+              href: PROFILE_ROUTE,
+              label: 'Profile',
+              icon: UserRound,
+              active: onProfile,
+            },
+            {
+              href: SETTINGS_ROUTE,
+              label: 'Settings',
+              icon: SettingsIcon,
+              active: onSettings,
+            },
+          ].map(({ href, label, icon: Icon, active }) => (
+            <Button
+              key={href}
+              asChild
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'text-muted-foreground hover:text-foreground',
+                active && 'bg-secondary text-foreground',
+              )}
+            >
+              <a
+                href={href}
+                aria-label={label}
+                title={label}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon />
               </a>
-            ))}
-          </div>
+            </Button>
+          ))}
         </div>
-        <div className="flex gap-2">
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'text-muted-foreground',
-              onCredentials && 'bg-brand-soft text-brand-strong',
-            )}
-          >
-            <a
-              href={CREDENTIALS_ROUTE}
-              aria-label="Saved Credentials"
-              title="Saved Credentials"
-              aria-current={onCredentials ? 'page' : undefined}
-            >
-              <FileText />
-            </a>
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'text-muted-foreground',
-              onProfile && 'bg-brand-soft text-brand-strong',
-            )}
-          >
-            <a
-              href={PROFILE_ROUTE}
-              aria-label="Profile"
-              aria-current={onProfile ? 'page' : undefined}
-            >
-              <UserRound />
-            </a>
-          </Button>
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'text-muted-foreground',
-              onSettings && 'bg-brand-soft text-brand-strong',
-            )}
-          >
-            <a
-              href={SETTINGS_ROUTE}
-              aria-label="Settings"
-              aria-current={onSettings ? 'page' : undefined}
-            >
-              <SettingsIcon />
-            </a>
-          </Button>
-        </div>
-      </nav>
+      </header>
 
-      {fullWidth ? (
+      {onBrowser ? (
+        <Workspace runs={runs} />
+      ) : (
         <main
           ref={pageMain}
           className="@container min-h-0 flex-1 overflow-y-auto px-8 py-8"
         >
-          {onCredentials ? (
-            <SavedCredentials />
-          ) : onQueue ? (
-            <JobsDashboard route={route} />
-          ) : onStatus ? (
-            <Status />
-          ) : onTasks ? (
-            <Tasks />
-          ) : (
-            <Settings route={route} legacyProfile={onProfile} />
-          )}
+          <div key={page} className="page-enter">
+            {onCredentials ? (
+              <SavedCredentials />
+            ) : onQueue ? (
+              <JobsDashboard route={route} runs={runs} />
+            ) : onStatus ? (
+              <Status />
+            ) : onTasks ? (
+              <Tasks runs={runs} />
+            ) : (
+              <Settings route={route} legacyProfile={onProfile} />
+            )}
+          </div>
         </main>
-      ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-2">
-          <main className="overflow-y-auto px-8 py-8">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Open a job
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Paste a job URL to load it in the browser on the right.
-            </p>
-
-            <form
-              className="mt-6 flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void openPage();
-              }}
-            >
-              <label className="sr-only" htmlFor="job-url">
-                Job URL
-              </label>
-              <Input
-                id="job-url"
-                type="url"
-                required
-                maxLength={8192}
-                placeholder="https://company.myworkdayjobs.com/…"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-              <Button
-                type="submit"
-                disabled={loading || filling || !draft.trim()}
-              >
-                {loading ? 'Opening…' : 'Open'}
-              </Button>
-            </form>
-
-            <form
-              className="mt-8 space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void fillAccount();
-              }}
-            >
-              <p className="text-sm text-muted-foreground">
-                Click Apply in the browser first. Saved credentials sign you in;
-                otherwise Forkday creates an account using your Profile email.
-              </p>
-              <Button type="submit" disabled={!pageUrl || loading || filling}>
-                {filling ? 'Signing in…' : 'Create Account / Sign In'}
-              </Button>
-            </form>
-            {fillResult && (
-              <p role="status" className="mt-4 text-sm">
-                Page: {fillResult.page}. Filled:{' '}
-                {fillResult.filled.join(', ') || 'none'}.
-                {fillResult.submission === 'submitted' &&
-                  ' Account form submitted. Continue in the browser.'}
-                {fillResult.submission === 'failed' &&
-                  ' Sign-in was not completed. Review the browser for errors or verification.'}
-              </p>
-            )}
-
-            {error && (
-              <p
-                className="mt-4 rounded-lg bg-destructive-soft px-4 py-3 text-sm text-destructive"
-                role="alert"
-              >
-                {error}
-              </p>
-            )}
-          </main>
-
-          {/* Placeholder under the native browser view; visible until a page loads. */}
-          <aside className="grid place-items-center border-l bg-card">
-            <div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-              <Globe className="size-8 stroke-[1.5]" />
-              <p className="text-sm">
-                {loading ? 'Loading page…' : 'No page open'}
-              </p>
-            </div>
-          </aside>
-        </div>
       )}
+      <Toaster besideBrowser={onBrowser} />
     </div>
   );
-}
-
-function errorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('Add your email in Profile.')
-    ? 'Add your email in Profile.'
-    : message;
 }

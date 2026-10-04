@@ -140,10 +140,13 @@ try {
     'Last name': 'Lovelace',
     'Address line 1': '1 Main St',
     City: 'Example City',
-    State: 'DC',
     'Postal code': '20001',
   }))
     await shell.getByLabel(`${label} *`, { exact: true }).fill(value);
+  await shell.getByRole('combobox', { name: 'State', exact: true }).click();
+  await shell
+    .getByRole('option', { name: 'District of Columbia (DC)', exact: true })
+    .click();
   assert.equal(
     await shell.getByLabel('Phone Device Type', { exact: true }).count(),
     0,
@@ -247,6 +250,12 @@ try {
   const firstRow = shell.getByRole('row').filter({
     has: shell.getByRole('cell', { name: 'company0', exact: true }),
   });
+  // Measure after the page-enter transition settles.
+  await shell.evaluate(() =>
+    Promise.all(
+      document.getAnimations().map((animation) => animation.finished),
+    ),
+  );
   const hiddenBounds = await firstRow
     .locator('td, button')
     .evaluateAll((elements) =>

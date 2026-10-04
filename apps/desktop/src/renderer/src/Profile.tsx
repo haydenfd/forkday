@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { FileText, Plus, Upload } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { FileText, LoaderCircle, Plus, Upload } from 'lucide-react';
 import {
   ProfileSectionFields,
   SaveProfileSectionSchema,
   type ProfileSection,
   US_PHONE_COUNTRY_CODE,
   US_COUNTRY,
+  US_STATES,
+  stateCode,
   type Profile as ProfileData,
 } from '../../shared/profile';
 import type { Resume } from '../../shared/resume';
@@ -15,6 +18,7 @@ import { Select } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { SaveChangesDialog } from '@/components/ui/save-changes-dialog';
+import { cn } from '@/lib/utils';
 
 export type { ProfileSection } from '../../shared/profile';
 const sectionLabels = {
@@ -30,6 +34,8 @@ type FieldDefinition = {
   type?: string;
   required?: boolean;
   options?: string[];
+  /** Like `options`, when the stored value differs from the shown label. */
+  choices?: { value: string; label: string }[];
   hint?: string;
   wide?: boolean;
   multiline?: boolean;
@@ -56,7 +62,15 @@ const sections: Record<
         { name: 'addressLine1', label: 'Address line 1', required: true },
         { name: 'addressLine2', label: 'Address line 2' },
         { name: 'city', label: 'City', required: true },
-        { name: 'state', label: 'State', required: true },
+        {
+          name: 'state',
+          label: 'State',
+          required: true,
+          choices: Object.entries(US_STATES).map(([code, name]) => ({
+            value: code,
+            label: `${name} (${code})`,
+          })),
+        },
         { name: 'postalCode', label: 'Postal code', required: true },
       ],
     },
@@ -196,8 +210,11 @@ const sections: Record<
 
 export default function Profile({
   section = 'profile',
+  actions,
 }: {
   section?: ProfileSection;
+  /** Header element that hosts the Save controls; none renders no controls. */
+  actions?: HTMLElement | null;
 }): React.JSX.Element {
   const [profile, setProfile] = useState<ProfileData>({});
   const [busy, setBusy] = useState(true);
@@ -322,23 +339,6 @@ export default function Profile({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-end gap-3">
-        {message && (
-          <p
-            role={message === 'Saved' ? 'status' : 'alert'}
-            className={`min-w-0 text-sm ${message === 'Saved' ? 'text-success' : 'text-destructive'}`}
-          >
-            {message}
-          </p>
-        )}
-        <Button
-          type="submit"
-          form="profile-form"
-          disabled={busy || loadFailed || !dirty}
-        >
-          {busy ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
       {section === 'resume' && (
         <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
           <div className="flex min-w-0 items-center gap-4">
@@ -401,12 +401,13 @@ export default function Profile({
             {sections[section].map(({ title, fields }) => (
               <fieldset
                 key={title}
-                className={`min-w-0 rounded-xl border bg-card p-5 ${section === 'resume' || section === 'disclosures' ? '@4xl:col-span-2' : ''}`}
+                className={`min-w-0 rounded-xl border bg-card p-5 shadow-card ${section === 'resume' || section === 'disclosures' ? '@4xl:col-span-2' : ''}`}
               >
-                <legend className="px-2 text-base font-semibold">
+                {/* Floated so the legend sits inside the card, not on its border. */}
+                <legend className="float-left mb-4 w-full text-base font-semibold">
                   {title}
                 </legend>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="clear-both grid gap-4 sm:grid-cols-2">
                   {fields.map(({ name, ...field }) => (
                     <Field
                       key={name}
@@ -635,6 +636,37 @@ export default function Profile({
           )}
         </fieldset>
       </form>
+      {/* Rendered into the Settings header so Save stays visible while scrolling. */}
+      {actions &&
+        createPortal(
+          <div className="flex items-center gap-3">
+            <p
+              role={message && message !== 'Saved' ? 'alert' : 'status'}
+              className={cn(
+                'max-w-72 truncate text-sm text-muted-foreground',
+                message === 'Saved' && 'text-success',
+                message && message !== 'Saved' && 'text-destructive',
+              )}
+              title={message}
+            >
+              {message ??
+                (busy && !loadFailed
+                  ? 'Loading…'
+                  : dirty
+                    ? 'Unsaved changes'
+                    : 'All changes saved')}
+            </p>
+            <Button
+              type="submit"
+              form="profile-form"
+              disabled={busy || loadFailed || !dirty}
+            >
+              {busy && dirty && <LoaderCircle className="animate-spin" />}
+              {busy && dirty ? 'Saving…' : 'Save'}
+            </Button>
+          </div>,
+          actions,
+        )}
       {destination !== undefined && (
         <SaveChangesDialog
           section={sectionLabels[section]}
@@ -666,6 +698,7 @@ function Field({
   type = 'text',
   required,
   options,
+  choices,
   hint,
   wide,
   multiline,
@@ -692,7 +725,7 @@ function Field({
         {label}
         {required && <span aria-hidden> *</span>}
       </label>
-      {options ? (
+      {options || choices ? (
         <Select
           id={id}
           value={value}
@@ -702,7 +735,8 @@ function Field({
           aria-describedby={hint ? `${id}-hint` : undefined}
           options={[
             { value: '', label: 'Not set' },
-            ...options.map((option) => ({ value: option, label: option })),
+            ...(choices ??
+              options!.map((option) => ({ value: option, label: option }))),
           ]}
         />
       ) : multiline ? (
@@ -729,7 +763,9 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function normalizeUSAnswers(profile: ProfileData): ProfileData {
+function normalizeUSAnswers(loaded: ProfileData): ProfileData {
+  // Older profiles may hold a state name; the dropdown uses codes.
+  const profile = { ...loaded, state: stateCode(loaded.state) };
   // Legacy answers saved for another country must not become US answers.
   if (
     !profile.workAuthorizationCountry ||
