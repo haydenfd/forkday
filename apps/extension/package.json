@@ -1,9 +1,9 @@
 {
   "name": "@forkday/extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Forkday Workday page detector.",
+  "description": "Forkday browser extension for Workday job pages.",
   "scripts": {
-    "lint": "node --check content.js"
+    "lint": "node --check content.js && node --check background.js && node -e \"JSON.parse(require('fs').readFileSync('manifest.json'))\""
   }
 }
