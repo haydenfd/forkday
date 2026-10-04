@@ -1,6 +1,6 @@
 # Forkday
 
-Forkday contains a local Electron shell and a minimal Chrome extension. The desktop app proves local Codex invocation; the extension detects supported Workday job pages without reading or sending page data.
+Forkday is a local Electron app plus a Firefox/Chrome extension. Click **Apply with Forkday** on a Workday job and the desktop app queues it, signs in, fills each application page from your profile, and stops for your review. Forkday never submits an application for you.
 
 ## Setup
 
@@ -21,7 +21,29 @@ pnpm test
 pnpm build
 ```
 
-To try the extension, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `apps/extension`. Visiting `https://*.myworkdayjobs.com/*` shows a dismissible Forkday prompt.
+`pnpm dev` and `pnpm start` re-sign the downloaded dev `Electron.app` ad hoc when
+needed (`scripts/sign-dev-electron.mjs`); macOS refuses notifications from it
+otherwise. After that re-sign, macOS asks once for access to the
+"Electron Safe Storage" keychain item: enter your login password and choose
+**Always Allow**.
+
+## Browser extension
+
+`apps/extension` is one Manifest V3 extension for Firefox (140+) and Chrome.
+
+- Firefox: open `about:debugging#/runtime/this-firefox`, click **Load Temporary
+  Add-on…**, and choose `apps/extension/manifest.json`. Temporary add-ons are
+  removed when Firefox quits; sign it as an unlisted add-on on
+  addons.mozilla.org to keep it.
+- Chrome: open `chrome://extensions`, turn on **Developer mode**, click **Load
+  unpacked**, and choose `apps/extension`.
+
+On a `*.myworkdayjobs.com` job posting, a card offers **Apply with Forkday** and
+then shows live progress (in line, signing in, filling, ready for review, needs
+you). It sends only the posting URL, title, and company. The background script
+posts JSON to the desktop app on `127.0.0.1:47615`; the app refuses requests with
+a web-page `Origin`, a non-loopback `Host`, or a non-JSON body, so websites cannot
+queue jobs. **Settings → Extension** shows the connection and the folder to load.
 
 ## Architecture
 
@@ -66,9 +88,9 @@ validates HTTP/HTTPS URLs, rejects embedded credentials, and blocks unsafe
 navigation. The remote page has no Node access or Forkday preload API. Links
 that request a new window open in the same pane.
 
-Apply starts manually in the browser; Codex's provider test does not
-control the page. Agent browser tools are not connected yet. The application
-tracker is saved locally and survives closing the app.
+Applications started from the queue or extension are automated with Playwright
+(see Applying with Forkday). The application tracker is saved locally and
+survives closing the app.
 
 Run `pnpm -C apps/desktop test:browser` to verify the split view, embedded
 browser, navigation guards, resize, Settings hide/show, URL validation, and page
@@ -108,10 +130,36 @@ Run `pnpm -C apps/desktop test:account` to check encrypted persistence and accou
 creation/sign-in across an app restart using local Workday fixtures. This check
 never submits to a live Workday site.
 
+## Applying with Forkday
+
+Start an application from the extension or with **Apply with Forkday** on a
+Workday job in **Job queue**. Applications run one at a time in the embedded
+browser:
+
+1. Open the posting and click **Apply**.
+2. Choose Apply Manually and sign in or create the account (see above).
+3. Fill the visible page from your profile: name, address, phone, links,
+   state/country/phone-type dropdowns, US authorization and sponsorship,
+   relocation, salary, disclosures, and the resume PDF. Filled values are never
+   overwritten; consent boxes, Next, and Submit are never touched.
+4. Stop at **Ready for review**, listing required fields that still need you
+   (for example "How did you hear about us?").
+
+Review the page in **Browser**, use Workday's Save and Continue, then press
+**Fill page** for the next step. **I submitted it** marks the application
+Completed and starts the next job in line; **Stop** marks it Stopped. If Workday
+needs you (email verification, an unknown page), the run shows **Needs you** and
+**Continue** resumes from the current page. The run's progress is shown in the
+top bar, on Tasks, in the queue, and in the extension card.
+
+Fields are matched by Workday field wrappers and their labels
+(`src/main/workday/applicationForm.ts`). Employer-specific questions are left for
+you. Run state lives in memory; quitting Forkday ends runs but keeps the queue.
+
 ## Settings and local data
 
-Settings has five sections: **Profile**, **Resume**, **Application answers**,
-**Disclosures**, and **Codex**. The Profile shortcut opens the same editor. Each
+Settings has seven sections: **Profile**, **Resume**, **Application answers**,
+**Disclosures**, **Extension**, **Notifications**, and **Codex**. The Profile shortcut opens the same editor. Each
 editable section has its own top-right **Save**. Leaving an unsaved section offers
 **Save changes**, **Discard**, or **Keep editing**, including Back navigation.
 
@@ -139,13 +187,14 @@ describe the scope and primary sources.
 Completed / Rejected / Stopped** status in `applications.json`. Statuses are updated manually. Adding a
 job does not open a browser. **Status** shows setup readiness and application
 counts; it does not show invocation history. Codex connection, authentication,
-and testing are available in the dedicated Codex settings section. Queue status
-changes request system notifications, including waiting, stopped, and idle.
-Clicking a notification brings Forkday's Tasks page forward. On macOS,
-[Electron notifications require a signed app](https://www.electronjs.org/docs/latest/tutorial/notifications)
-and system notification permission. Delivery is not verified in the current
-development app: a native probe returned `UNErrorDomain error 1`. The workspace
-check verifies the notification calls and click behavior with a test double.
+and testing are available in the dedicated Codex settings section. System
+notifications announce jobs queued from the extension, applications ready for
+review or needing you, and queue status changes including idle; clicking one
+opens the relevant page. **Settings → Notifications** sends a test notification
+and opens the system settings. On macOS, notifications require a sealed app
+bundle: the stock dev `Electron.app` fails with `UNErrorDomain error 1` until the
+dev scripts re-sign it (delivery verified after re-signing). If delivery fails,
+Forkday shows an in-app notice instead.
 
 Profile data, PDFs, and the application tracker are local plaintext. Account
 passwords remain separate in encrypted storage. New data files have owner-only
@@ -169,5 +218,5 @@ a fixture Codex CLI; it does not call an AI service or submit any application.
 ## Future scope
 
 - Claude Code provider
-- Chrome extension handoff to the desktop app
-- browser-connected application workflow
+- Codex answers for employer-specific questions
+- structured work-history entry on My Experience pages
