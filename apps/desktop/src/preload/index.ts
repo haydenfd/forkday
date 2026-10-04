@@ -2,6 +2,15 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 import type { ForkdayApi } from '../shared/contracts';
 
+function subscribe<T>(channel: string, listener: (value: T) => void) {
+  const handler = (_event: Electron.IpcRendererEvent, value: T): void =>
+    listener(value);
+  ipcRenderer.on(channel, handler);
+  return () => {
+    ipcRenderer.removeListener(channel, handler);
+  };
+}
+
 const api: ForkdayApi = {
   listCredentials: () => ipcRenderer.invoke('credentials:list'),
   revealCredentialPassword: (origin, email) =>
@@ -22,11 +31,19 @@ const api: ForkdayApi = {
   openBrowser: (url) => ipcRenderer.invoke('browser:open', url),
   setBrowserVisible: (visible) =>
     ipcRenderer.invoke('browser:visible', visible),
-  listJobs: () => ipcRenderer.invoke('jobs:list'),
-  addJob: (url) => ipcRenderer.invoke('jobs:add', url),
-  showJob: (id) => ipcRenderer.invoke('jobs:show', id),
-  showDashboard: () => ipcRenderer.invoke('jobs:home'),
-  completeJob: (id) => ipcRenderer.invoke('jobs:complete', id),
+  removeApplication: (id) => ipcRenderer.invoke('applications:remove', id),
+  listRuns: () => ipcRenderer.invoke('runs:list'),
+  startRun: (id) => ipcRenderer.invoke('runs:start', id),
+  continueRun: (id) => ipcRenderer.invoke('runs:continue', id),
+  finishRun: (id, outcome) =>
+    ipcRenderer.invoke('runs:finish', { id, outcome }),
+  onRunsChanged: (listener) => subscribe('runs:changed', listener),
+  onNavigate: (listener) => subscribe('app:navigate', listener),
+  onNotificationFailed: (listener) =>
+    subscribe('notification:failed', listener),
+  getBridgeStatus: () => ipcRenderer.invoke('bridge:status'),
+  testNotification: () => ipcRenderer.invoke('notification:test'),
+  openNotificationSettings: () => ipcRenderer.invoke('notification:settings'),
   getProviderStatus: () => ipcRenderer.invoke('provider:status'),
   testProvider: () => ipcRenderer.invoke('provider:test'),
   authenticate: () => ipcRenderer.invoke('provider:authenticate'),

@@ -1,7 +1,7 @@
 import { app, WebContentsView, type BrowserWindow } from 'electron';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { chromium, type Browser } from 'playwright';
+import { chromium, type Browser, type Page } from 'playwright';
 
 import type { AccountFormResult } from '../shared/contracts';
 import {
@@ -42,6 +42,8 @@ export class BrowserManager {
           nodeIntegration: false,
           contextIsolation: true,
           sandbox: true,
+          // Runs automate this page while it is hidden behind other routes.
+          backgroundThrottling: false,
         },
       });
       const contents = this.view.webContents;
@@ -72,6 +74,26 @@ export class BrowserManager {
     await this.view.webContents.loadURL(url);
   }
 
+  /** URL loaded in the embedded browser, if any. */
+  currentUrl(): string | undefined {
+    const contents = this.view?.webContents;
+    return contents && !contents.isDestroyed() ? contents.getURL() : undefined;
+  }
+
+  /** Run Playwright against the embedded page; one automation at a time. */
+  async withPage<T>(action: (page: Page) => Promise<T>): Promise<T> {
+    if (this.filling)
+      throw new Error('Forkday is already working on the page.');
+    this.filling = true;
+    try {
+      const page = await this.page();
+      if (!page) throw new Error('Open a job page first.');
+      return await action(page);
+    } finally {
+      this.filling = false;
+    }
+  }
+
   async fillAccountForm(value: unknown): Promise<AccountFormResult> {
     if (
       typeof value !== 'string' ||
@@ -92,93 +114,53 @@ export class BrowserManager {
       return { page: 'unknown', filled: [] };
     this.filling = true;
     try {
-      if (!this.automation?.isConnected()) {
-        const [port, endpoint] = (
-          await readFile(
-            path.join(app.getPath('userData'), 'DevToolsActivePort'),
-            'utf8',
-          )
-        )
-          .trim()
-          .split('\n');
-        if (!/^\d+$/.test(port) || !endpoint.startsWith('/devtools/browser/'))
-          throw new Error('Browser connection unavailable.');
-        this.automation = await chromium.connectOverCDP(
-          `ws://127.0.0.1:${port}${endpoint}`,
-          { timeout: 5000 },
-        );
+      const page = await this.page();
+      if (!page) return { page: 'unknown', filled: [] };
+      const origin = new URL(page.url()).origin;
+      if (origin !== url.origin) return { page: 'unknown', filled: [] };
+      const kind = await detectAccountPage(page);
+      if (
+        kind === 'unknown' &&
+        !(await page
+          .locator('[data-automation-id="applyManually"]')
+          .isVisible())
+      )
+        return { page: 'unknown', filled: [] };
+      const existing = await this.credentials.find(origin, value);
+      const password = existing?.password ?? generatePassword();
+      if (!existing) {
+        const heading = page.getByRole('heading', { level: 1 });
+        const title =
+          (await heading.count()) === 1
+            ? await heading.textContent({ timeout: 3000 })
+            : '';
+        const company =
+          title
+            ?.trim()
+            .match(/^Careers at (.+)$/i)?.[1]
+            ?.slice(0, 200) || url.hostname.split('.')[0];
+        // Persist before filling or submission so account creation cannot lose the password.
+        await this.credentials.save({
+          company,
+          origin,
+          email: value,
+          password,
+        });
       }
-      // Match the actual WebContents target, rather than a URL shared by tabs.
-      contents.debugger.attach('1.3');
-      let targetId: string;
-      try {
-        const { targetInfo } = await contents.debugger.sendCommand(
-          'Target.getTargetInfo',
-        );
-        targetId = targetInfo.targetId;
-      } finally {
-        contents.debugger.detach();
-      }
-      for (const page of this.automation
-        .contexts()
-        .flatMap((context) => context.pages())) {
-        const session = await page.context().newCDPSession(page);
-        let matches: boolean;
-        try {
-          const { targetInfo } = await session.send('Target.getTargetInfo');
-          matches = targetInfo.targetId === targetId;
-        } finally {
-          await session.detach();
-        }
-        if (matches) {
-          const origin = new URL(page.url()).origin;
-          if (origin !== url.origin) return { page: 'unknown', filled: [] };
-          const kind = await detectAccountPage(page);
-          if (
-            kind === 'unknown' &&
-            !(await page
-              .locator('[data-automation-id="applyManually"]')
-              .isVisible())
-          )
-            return { page: 'unknown', filled: [] };
-          const existing = await this.credentials.find(origin, value);
-          const password = existing?.password ?? generatePassword();
-          if (!existing) {
-            const heading = page.getByRole('heading', { level: 1 });
-            const title =
-              (await heading.count()) === 1
-                ? await heading.textContent({ timeout: 3000 })
-                : '';
-            const company =
-              title
-                ?.trim()
-                .match(/^Careers at (.+)$/i)?.[1]
-                ?.slice(0, 200) || url.hostname.split('.')[0];
-            // Persist before filling or submission so account creation cannot lose the password.
-            await this.credentials.save({
-              company,
-              origin,
-              email: value,
-              password,
-            });
-          }
-          if (new URL(page.url()).origin !== origin)
-            return { page: 'unknown', filled: [] };
-          const result = await fillAccountForm(
-            page,
-            existing?.email ?? value,
-            password,
-            !existing,
-            Boolean(existing),
-          );
-          if (new URL(page.url()).origin !== origin)
-            return { page: 'unknown', filled: result.filled };
-          if (result.page === 'create_account' || result.page === 'sign_in')
-            return await submitAccountForm(page, result);
-          return result;
-        }
-      }
-      return { page: 'unknown', filled: [] };
+      if (new URL(page.url()).origin !== origin)
+        return { page: 'unknown', filled: [] };
+      const result = await fillAccountForm(
+        page,
+        existing?.email ?? value,
+        password,
+        !existing,
+        Boolean(existing),
+      );
+      if (new URL(page.url()).origin !== origin)
+        return { page: 'unknown', filled: result.filled };
+      if (result.page === 'create_account' || result.page === 'sign_in')
+        return await submitAccountForm(page, result);
+      return result;
     } catch (error) {
       if (error instanceof CredentialStorageError) throw error;
       // Playwright errors can contain input values; never forward them through IPC.
@@ -187,6 +169,50 @@ export class BrowserManager {
       );
     } finally {
       this.filling = false;
+    }
+  }
+
+  /** The Playwright page backing the embedded WebContentsView. */
+  private async page(): Promise<Page | undefined> {
+    const contents = this.view?.webContents;
+    if (!contents || contents.isDestroyed()) return;
+    if (!this.automation?.isConnected()) {
+      const [port, endpoint] = (
+        await readFile(
+          path.join(app.getPath('userData'), 'DevToolsActivePort'),
+          'utf8',
+        )
+      )
+        .trim()
+        .split('\n');
+      if (!/^\d+$/.test(port) || !endpoint.startsWith('/devtools/browser/'))
+        throw new Error('Browser connection unavailable.');
+      this.automation = await chromium.connectOverCDP(
+        `ws://127.0.0.1:${port}${endpoint}`,
+        { timeout: 5000 },
+      );
+    }
+    // Match the actual WebContents target, rather than a URL shared by tabs.
+    contents.debugger.attach('1.3');
+    let targetId: string;
+    try {
+      const { targetInfo } = await contents.debugger.sendCommand(
+        'Target.getTargetInfo',
+      );
+      targetId = targetInfo.targetId;
+    } finally {
+      contents.debugger.detach();
+    }
+    for (const page of this.automation
+      .contexts()
+      .flatMap((context) => context.pages())) {
+      const session = await page.context().newCDPSession(page);
+      try {
+        const { targetInfo } = await session.send('Target.getTargetInfo');
+        if (targetInfo.targetId === targetId) return page;
+      } finally {
+        await session.detach();
+      }
     }
   }
 

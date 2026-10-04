@@ -2,6 +2,26 @@ import { z } from 'zod';
 
 export const US_COUNTRY = 'United States of America';
 export const US_PHONE_COUNTRY_CODE = 'United States of America (+1)';
+
+/** Two-letter code → name. Profile stores the code; Workday lists names. */
+export const US_STATES: Record<string, string> = Object.fromEntries(
+  'AL Alabama|AK Alaska|AZ Arizona|AR Arkansas|CA California|CO Colorado|CT Connecticut|DE Delaware|DC District of Columbia|FL Florida|GA Georgia|HI Hawaii|ID Idaho|IL Illinois|IN Indiana|IA Iowa|KS Kansas|KY Kentucky|LA Louisiana|ME Maine|MD Maryland|MA Massachusetts|MI Michigan|MN Minnesota|MS Mississippi|MO Missouri|MT Montana|NE Nebraska|NV Nevada|NH New Hampshire|NJ New Jersey|NM New Mexico|NY New York|NC North Carolina|ND North Dakota|OH Ohio|OK Oklahoma|OR Oregon|PA Pennsylvania|PR Puerto Rico|RI Rhode Island|SC South Carolina|SD South Dakota|TN Tennessee|TX Texas|UT Utah|VT Vermont|VA Virginia|WA Washington|WV West Virginia|WI Wisconsin|WY Wyoming'
+    .split('|')
+    .map((entry) => [entry.slice(0, 2), entry.slice(3)]),
+);
+
+/** Code for a state given as code or name ("ca", "California" → "CA"). */
+export function stateCode(value: string | undefined): string | undefined {
+  const text = value?.trim();
+  if (!text) return value;
+  const upper = text.toUpperCase();
+  if (US_STATES[upper]) return upper;
+  return (
+    Object.keys(US_STATES).find(
+      (code) => US_STATES[code].toLowerCase() === text.toLowerCase(),
+    ) ?? value
+  );
+}
 const text = z.string().max(2_000).optional();
 const month = z
   .string()
