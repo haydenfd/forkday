@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SavedCredential } from '../../shared/contracts';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Search } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -54,37 +55,53 @@ export default function SavedCredentials(): React.JSX.Element {
   };
 
   return (
-    <section>
-      <h1 className="text-2xl font-semibold tracking-tight">
-        Saved Credentials
-      </h1>
-      <label htmlFor="credential-search" className="sr-only">
-        Search saved credentials
-      </label>
-      <Input
-        id="credential-search"
-        type="search"
-        placeholder="Search companies or emails…"
-        className="mt-6 max-w-sm"
-        value={search}
-        onChange={(event) => {
-          setSearch(event.target.value);
-          setRevealed({});
-        }}
-        disabled={!credentials || pending !== undefined}
-      />
+    <section className="mx-auto w-full max-w-5xl">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Saved Credentials
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Workday accounts Forkday created or signed in with, encrypted with
+            your system keychain.
+          </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <label htmlFor="credential-search" className="sr-only">
+            Search saved credentials
+          </label>
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground"
+          />
+          <Input
+            id="credential-search"
+            type="search"
+            placeholder="Search companies or emails…"
+            className="pl-9"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setRevealed({});
+            }}
+            disabled={!credentials || pending !== undefined}
+          />
+        </div>
+      </header>
       {error && (
         <p role="alert" className="mt-6 text-sm text-destructive">
           {error}
         </p>
       )}
       {!error && !credentials && (
-        <p role="status" className="mt-6 text-sm">
-          Loading…
-        </p>
+        <div role="status" aria-label="Loading" className="mt-6 space-y-2">
+          {[0, 1, 2].map((key) => (
+            <div key={key} className="skeleton h-12" />
+          ))}
+        </div>
       )}
       {rows && (
-        <div className="mt-6 overflow-x-auto">
+        <Card className="mt-6 overflow-x-auto">
           <table className="w-full min-w-[40rem] table-fixed text-left text-sm">
             <caption className="sr-only">Saved account credentials</caption>
             <colgroup>
@@ -92,7 +109,7 @@ export default function SavedCredentials(): React.JSX.Element {
               <col className="w-2/5" />
               <col />
             </colgroup>
-            <thead className="border-y bg-secondary/50 text-muted-foreground">
+            <thead className="border-b bg-secondary/50 text-muted-foreground">
               <tr>
                 <th scope="col" className="break-words px-4 py-3 font-medium">
                   Company
@@ -112,7 +129,7 @@ export default function SavedCredentials(): React.JSX.Element {
                 return (
                   <tr
                     key={`${credential.origin}:${credential.email}`}
-                    className="border-b hover:bg-secondary/40"
+                    className="border-b last:border-b-0 hover:bg-secondary/40"
                   >
                     <td className="break-words px-4 py-3 font-medium">
                       {credential.company}
@@ -160,17 +177,21 @@ export default function SavedCredentials(): React.JSX.Element {
                 <tr>
                   <td
                     colSpan={3}
-                    className="px-4 py-8 text-center text-muted-foreground"
+                    className="px-4 py-12 text-center text-muted-foreground"
                   >
+                    <KeyRound
+                      aria-hidden
+                      className="mx-auto mb-3 size-6 text-muted-foreground"
+                    />
                     {credentials?.length
                       ? 'No matching credentials.'
-                      : 'No saved credentials yet.'}
+                      : 'No saved credentials yet. They appear after Forkday signs in to a Workday site.'}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
     </section>
   );

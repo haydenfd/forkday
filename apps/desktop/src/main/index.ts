@@ -61,10 +61,20 @@ if (!ownsInstance) app.quit();
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
     width: 1280,
-    height: 680,
+    height: 800,
     minWidth: 900,
     minHeight: 560,
     title: 'Forkday',
+    icon,
+    show: false,
+    backgroundColor: '#151719',
+    // macOS: traffic lights sit inside the app's 56px top bar.
+    ...(process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          trafficLightPosition: { x: 18, y: 20 },
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
@@ -74,6 +84,7 @@ async function createWindow(): Promise<void> {
   });
 
   mainWindow = window;
+  window.once('ready-to-show', () => window.show());
   window.on('closed', () => {
     mainWindow = undefined;
   });
@@ -397,6 +408,7 @@ if (ownsInstance)
   app.whenReady().then(async () => {
     // Windows groups notifications by this id; macOS uses the bundle.
     app.setAppUserModelId('com.forkday.desktop');
+    if (process.platform === 'darwin') app.dock?.setIcon(icon);
     const loginPath = await resolveLoginShellPath(processes);
     process.env.PATH = loginPath;
     provider = new CodexProvider(processes, loginPath);

@@ -57,7 +57,6 @@ export default function CodexSettings(): React.JSX.Element {
     <>
       <div className="max-w-2xl">
         <section>
-          <h2 className="eyebrow mb-3">Codex connection</h2>
           <Card className="p-6" aria-busy={busy}>
             <div className="flex items-center justify-between gap-4">
               <h3 className="text-base font-semibold tracking-tight">

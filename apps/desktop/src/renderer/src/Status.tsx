@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpRight, RefreshCw } from 'lucide-react';
-import type { ProviderHealth } from '../../shared/contracts';
+import { ArrowRight, RefreshCw } from 'lucide-react';
+import type { BridgeStatus, ProviderHealth } from '../../shared/contracts';
 import type { Profile } from '../../shared/profile';
 import { CompleteProfileSchema, US_COUNTRY } from '../../shared/profile';
 import type { Resume } from '../../shared/resume';
@@ -14,6 +14,7 @@ type Snapshot = {
   resume?: Resume | null;
   health?: ProviderHealth;
   applications?: Application[];
+  bridge?: BridgeStatus;
 };
 export default function Status(): React.JSX.Element {
   const [snapshot, setSnapshot] = useState<Snapshot>({});
@@ -27,14 +28,16 @@ export default function Status(): React.JSX.Element {
       window.forkday.getResume(),
       window.forkday.getProviderStatus(),
       window.forkday.listApplications(),
+      window.forkday.getBridgeStatus(),
     ]);
-    const [profile, resume, health, applications] = results;
+    const [profile, resume, health, applications, bridge] = results;
     setSnapshot({
       profile: profile.status === 'fulfilled' ? profile.value : undefined,
       resume: resume.status === 'fulfilled' ? resume.value : undefined,
       health: health.status === 'fulfilled' ? health.value : undefined,
       applications:
         applications.status === 'fulfilled' ? applications.value : undefined,
+      bridge: bridge.status === 'fulfilled' ? bridge.value : undefined,
     });
     setErrors(
       results.flatMap((result) =>
@@ -46,7 +49,7 @@ export default function Status(): React.JSX.Element {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  const { profile, resume, health, applications } = snapshot;
+  const { profile, resume, health, applications, bridge } = snapshot;
   const answersReady = Boolean(
     profile?.workAuthorizationCountry === US_COUNTRY &&
     profile.authorizedToWork &&
@@ -86,12 +89,28 @@ export default function Status(): React.JSX.Element {
         : (health?.error ?? 'Check the local Codex connection.'),
       href: '#/settings/codex',
     },
+    {
+      label: 'Browser extension',
+      ready: bridge?.listening,
+      detail: bridge?.listening
+        ? `Listening on 127.0.0.1:${bridge.port}. Apply with Forkday works from Firefox or Chrome.`
+        : (bridge?.error ?? 'Starting the extension connection…'),
+      href: '#/settings/extension',
+    },
   ];
+  const readyCount = cards.filter((card) => card.ready).length;
   return (
     <section className="mx-auto w-full max-w-5xl" aria-busy={busy}>
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Status</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {busy
+              ? 'Checking your setup…'
+              : readyCount === cards.length
+                ? 'Everything is ready to apply.'
+                : `${readyCount} of ${cards.length} ready`}
+          </p>
         </div>
         <Button
           type="button"
@@ -116,21 +135,25 @@ export default function Status(): React.JSX.Element {
           ))}
         </div>
       )}
-      <div className="mt-7 grid gap-4 sm:grid-cols-2">
+      <div className="mt-7 grid gap-3 @3xl:grid-cols-2">
         {cards.map(({ label, ready, detail, href }) => (
-          <Card key={label} className="flex flex-col p-5">
+          <a
+            key={label}
+            href={href}
+            className="card-link group flex flex-col rounded-xl border bg-card p-5 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          >
             <div className="flex items-center justify-between gap-3">
               <h2 className="font-semibold">{label}</h2>
               <Badge
                 variant={
-                  busy || ready === undefined
+                  ready === undefined
                     ? 'secondary'
                     : ready
                       ? 'success'
                       : 'warning'
                 }
               >
-                {busy
+                {busy && ready === undefined
                   ? 'Checking'
                   : ready === undefined
                     ? 'Unavailable'
@@ -139,27 +162,30 @@ export default function Status(): React.JSX.Element {
                       : 'Needs setup'}
               </Badge>
             </div>
-            <p className="my-4 flex-1 break-words text-sm text-muted-foreground">
+            <p className="mt-3 flex-1 break-words text-sm text-muted-foreground">
               {detail}
             </p>
-            <a
-              className="inline-flex items-center gap-2 text-sm font-medium text-brand"
-              href={href}
-            >
+            <span className="mt-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground group-hover:text-foreground">
               Open settings
-              <ArrowUpRight className="size-4" />
-            </a>
-          </Card>
+              <ArrowRight
+                aria-hidden
+                className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5"
+              />
+            </span>
+          </a>
         ))}
       </div>
       <Card className="mt-6 p-5">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Applications</h2>
-          <a href="#/queue" className="text-sm font-medium text-brand">
+          <a
+            href="#/queue"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
             Open job queue →
           </a>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-5">
+        <div className="mt-5 grid grid-cols-2 gap-4 @3xl:grid-cols-5">
           {(
             [
               'waiting',
@@ -169,8 +195,12 @@ export default function Status(): React.JSX.Element {
               'stopped',
             ] as const
           ).map((status) => (
-            <div key={status}>
-              <p className="text-2xl font-semibold">
+            <a
+              key={status}
+              href={`#/queue/${status}`}
+              className="-m-2 rounded-lg p-2 hover:bg-secondary/60"
+            >
+              <p className="text-2xl font-semibold tabular-nums">
                 {applications
                   ? applications.filter((item) => item.status === status).length
                   : '—'}
@@ -178,7 +208,7 @@ export default function Status(): React.JSX.Element {
               <p className="mt-1 text-sm capitalize text-muted-foreground">
                 {status}
               </p>
-            </div>
+            </a>
           ))}
         </div>
       </Card>

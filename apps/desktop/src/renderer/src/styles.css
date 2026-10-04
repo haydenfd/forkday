@@ -64,6 +64,8 @@
   --brand: #70dda0;
   --brand-soft: #193c2a;
   --brand-strong: #86efac;
+  /* Logo tile: deeper than --brand so the white fork reads at 16px */
+  --logo: #2fa866;
 
   /* Status: text color on its -soft background */
   --success: #6ee7b7;
@@ -92,6 +94,10 @@
   }
   ::selection {
     @apply bg-brand-soft text-brand-strong;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
   button:not(:disabled),
   summary {
@@ -124,18 +130,11 @@
     outline-offset: 4px;
     border-radius: 4px;
   }
-  nav a[aria-current='page']:hover {
-    background-color: var(--brand-soft);
-    color: var(--brand-strong);
-  }
   @media (hover: hover) {
     input:not(:disabled):hover,
     textarea:not(:disabled):hover,
     [role='combobox']:not(:disabled):hover {
       border-color: var(--muted-foreground);
-    }
-    main a:hover {
-      color: var(--brand-strong);
     }
   }
 }
@@ -264,5 +263,89 @@
 @media (prefers-reduced-motion: reduce) {
   .t-icon-swap .t-icon {
     transition: none !important;
+  }
+}
+
+/* macOS hidden title bar: the top bar drags the window; its controls do not. */
+.app-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.app-drag :is(a, button, input) {
+  -webkit-app-region: no-drag;
+}
+
+/* Each route change replays this on the page wrapper. */
+.page-enter {
+  animation: page-enter var(--duration-fast) var(--ease-smooth-out);
+}
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.slide-in {
+  animation: slide-in var(--duration-fast) var(--ease-smooth-out);
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.toast-enter {
+  animation: toast-enter var(--duration-fast) var(--ease-smooth-out);
+}
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Interactive cards lift their border on hover; static cards never react. */
+.card-link {
+  transition:
+    border-color var(--duration-quick) ease-out,
+    background-color var(--duration-quick) ease-out;
+}
+@media (hover: hover) {
+  .card-link:hover {
+    border-color: var(--input);
+    background-color: color-mix(in srgb, var(--card) 70%, var(--secondary));
+  }
+}
+
+.skeleton {
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--foreground) 6%, transparent),
+      transparent
+    )
+    var(--secondary);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
   }
 }
